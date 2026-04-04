@@ -1,3 +1,5 @@
+import fs from "fs";
+import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -108,6 +110,22 @@ interface BraveResult {
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const DEFAULT_LIMIT = 18;
+const ENV_PATH = path.resolve(process.cwd(), ".env");
+let envCache: Record<string, string> | null = null;
+
+export async function GET() {
+  const defaults = getServerProviderKeys();
+  return NextResponse.json({
+    providers: {
+      "scraping-win": true,
+      google: Boolean(defaults.googleApiKey && defaults.googleCx),
+      pixabay: Boolean(defaults.pixabayKey),
+      pexels: Boolean(defaults.pexelsKey),
+      brave: Boolean(defaults.braveKey),
+    },
+    defaults,
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -116,7 +134,14 @@ export async function POST(request: NextRequest) {
     const limit = payload.limit ?? DEFAULT_LIMIT;
     const minSizeKb = typeof payload.minSizeKb === "number" ? payload.minSizeKb : undefined;
     const minFileSizeBytes = typeof minSizeKb === "number" && minSizeKb > 0 ? minSizeKb * 1024 : undefined;
-    const keys: ProviderKeys = payload.keys ?? {};
+    const envDefaults = getServerProviderKeys();
+    const keys: ProviderKeys = {
+      googleApiKey: payload.keys?.googleApiKey || envDefaults.googleApiKey,
+      googleCx: payload.keys?.googleCx || envDefaults.googleCx,
+      pixabayKey: payload.keys?.pixabayKey || envDefaults.pixabayKey,
+      pexelsKey: payload.keys?.pexelsKey || envDefaults.pexelsKey,
+      braveKey: payload.keys?.braveKey || envDefaults.braveKey,
+    };
     const uniqueProviders = Array.from(new Set(payload.providers)) as Provider[];
     const keywords = buildKeywordList(payload.keywords, payload.query);
     if (!keywords.length) {
@@ -526,4 +551,55 @@ async function searchBrave(query: string, limit: number, apiKey: string): Promis
       },
     ];
   });
+}
+
+function getServerProviderKeys(): ProviderKeys {
+  return {
+    googleApiKey: getSecretEnvValue("GOOGLE_CSE_KEY"),
+    googleCx: getSecretEnvValue("GOOGLE_CSE_CX"),
+    pixabayKey: getSecretEnvValue("PIXABAY_API_KEY"),
+    pexelsKey: getSecretEnvValue("PEXELS_API_KEY"),
+    braveKey: getSecretEnvValue("BRAVE_API_KEY"),
+  };
+}
+
+function getSecretEnvValue(name: string) {
+  if (process.env[name]) {
+    return process.env[name];
+  }
+  const localEnv = readLocalEnv();
+  return localEnv[name];
+}
+
+function readLocalEnv() {
+  if (envCache) {
+    return envCache;
+  }
+  envCache = {};
+  try {
+    const raw = fs.readFileSync(ENV_PATH, "utf-8");
+    const lines = raw.split(/\r?\n/);
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) {
+        continue;
+      }
+      const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!match) {
+        continue;
+      }
+      const [, key, valueRaw] = match;
+      let value = valueRaw.trim();
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1);
+      }
+      envCache[key] = value;
+    }
+  } catch {
+    // ignore missing env file
+  }
+  return envCache;
 }

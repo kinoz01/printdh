@@ -136,6 +136,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     index: number;
     position: "before" | "after";
   } | null>(null);
+  const [serverProviderSupport, setServerProviderSupport] = useState<Record<ProviderValue, boolean> | null>(null);
 
   const refreshLibrary = useCallback(async () => {
     try {
@@ -184,6 +185,39 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     void refreshLibrary();
   }, [refreshLibrary]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchServerSupport() {
+      try {
+        const response = await fetch("/api/image-search", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to check provider status");
+        }
+        const payload = await response.json();
+        if (!cancelled) {
+          setServerProviderSupport(payload.providers ?? null);
+          if (payload.defaults) {
+            setApiKeys((current) => ({
+              googleApiKey: current.googleApiKey || payload.defaults.googleApiKey || "",
+              googleCx: current.googleCx || payload.defaults.googleCx || "",
+              pixabayKey: current.pixabayKey || payload.defaults.pixabayKey || "",
+              pexelsKey: current.pexelsKey || payload.defaults.pexelsKey || "",
+              braveKey: current.braveKey || payload.defaults.braveKey || "",
+            }));
+          }
+        }
+      } catch {
+        if (!cancelled) {
+          setServerProviderSupport(null);
+        }
+      }
+    }
+    void fetchServerSupport();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const providerMeta = useMemo(() => {
     const missingKeys: Record<ProviderValue, boolean> = {
       "scraping-win": false,
@@ -192,8 +226,22 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
       pexels: !apiKeys.pexelsKey,
       brave: !apiKeys.braveKey,
     };
-    return missingKeys;
-  }, [apiKeys]);
+    const serverSupport: Record<ProviderValue, boolean> = {
+      "scraping-win": true,
+      google: Boolean(serverProviderSupport?.google),
+      pixabay: Boolean(serverProviderSupport?.pixabay),
+      pexels: Boolean(serverProviderSupport?.pexels),
+      brave: Boolean(serverProviderSupport?.brave),
+    };
+    const meta: Record<ProviderValue, { missingLocal: boolean; hasServer: boolean }> = {
+      "scraping-win": { missingLocal: false, hasServer: true },
+      google: { missingLocal: missingKeys.google, hasServer: serverSupport.google },
+      pixabay: { missingLocal: missingKeys.pixabay, hasServer: serverSupport.pixabay },
+      pexels: { missingLocal: missingKeys.pexels, hasServer: serverSupport.pexels },
+      brave: { missingLocal: missingKeys.brave, hasServer: serverSupport.brave },
+    };
+    return meta;
+  }, [apiKeys, serverProviderSupport]);
 
   const handleProviderToggle = useCallback(
     (value: ProviderValue) => {
@@ -652,7 +700,8 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
           {PROVIDERS.map((provider) => {
             const isChecked = selectedProviders.has(provider.value);
-            const missingKeys = provider.requiresKeys && providerMeta[provider.value];
+            const support = providerMeta[provider.value];
+            const missingKeys = provider.requiresKeys && support.missingLocal && !support.hasServer;
             const disabled = provider.value === "scraping-win";
             return (
               <label
@@ -666,13 +715,16 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
                   <input
                     type="checkbox"
                     checked={isChecked}
-                    disabled={disabled || (provider.requiresKeys && missingKeys)}
+                    disabled={disabled || missingKeys}
                     onChange={() => handleProviderToggle(provider.value)}
                   />
                 </div>
                 <p className="text-xs text-zinc-600">{provider.description}</p>
-                {provider.requiresKeys && missingKeys && (
+                {provider.requiresKeys && support.missingLocal && !support.hasServer && (
                   <p className="text-xs font-medium text-amber-600">Add keys to enable</p>
+                )}
+                {provider.requiresKeys && support.missingLocal && support.hasServer && (
+                  <p className="text-xs font-medium text-emerald-600">Server keys active</p>
                 )}
                 {provider.value === "scraping-win" && <p className="text-xs text-emerald-600">Always active</p>}
               </label>
