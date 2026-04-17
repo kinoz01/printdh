@@ -23,9 +23,12 @@ The app preloads `../data/facts.json`, `../data/list.json`, and `../data/list_de
 
 ### Running locally
 
+This project requires Node `20.19.0` or newer. The repo includes `.nvmrc` so you can switch with `nvm use` if you use nvm.
+
 1. Install dependencies once:
 
    ```bash
+   nvm use
    npm install
    ```
 
@@ -36,6 +39,17 @@ The app preloads `../data/facts.json`, `../data/list.json`, and `../data/list_de
    ```
 
 3. Visit [http://localhost:3000](http://localhost:3000) and select the layout mode you want.
+
+### Build issue: Node 18
+
+If `npm run build` prints `You are using Node.js 18.20.4`, your shell is still on an unsupported runtime. Switch to Node `20.19.0` or newer, then reinstall and rebuild:
+
+```bash
+nvm install 20.19.0
+nvm use 20.19.0
+npm install
+npm run build
+```
 
 ### API
 

@@ -1,6 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { GeneratorApp } from "@/components/GeneratorApp";
+import { PdfCompressor } from "@/components/PdfCompressor";
 
 const DATA_DIR = path.resolve(process.cwd(), "..", "data");
 
@@ -40,6 +41,7 @@ export default async function HomePage() {
           initialListDescription={listDescription}
           defaultImageLibrary="../images"
         />
+        <PdfCompressor />
       </div>
     </main>
   );
