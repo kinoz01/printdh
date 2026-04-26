@@ -74,11 +74,13 @@ export interface OverlayConfig {
   textOffsetTop: number;
 }
 
+export type PdfImageMimeType = "image/png" | "image/jpeg";
+
 export interface ImageAsset {
   bytes: Uint8Array;
   width: number;
   height: number;
-  mimeType: string;
+  mimeType: PdfImageMimeType;
 }
 
 export interface TemplateAsset {

@@ -80,16 +80,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
   const [pageCount, setPageCount] = useState(59);
   const [overlayOpacity, setOverlayOpacity] = useState(0.75);
+  const [fullFactOpacity, setFullFactOpacity] = useState(0.6);
   const [factsPerPage, setFactsPerPage] = useState(3);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const needsOverlayOpacity = !["image-only", "dictionary", "full-fact"].includes(mode);
+  const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
   const needsList = ["list"].includes(mode);
   const needsListDescription = ["list-description", "list-description-even"].includes(mode);
+  const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
+  const currentOpacity = mode === "full-fact" ? fullFactOpacity : overlayOpacity;
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
@@ -100,7 +103,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
       pageCount: Math.max(4, Math.min(200, safePageCount)),
     };
     if (needsOverlayOpacity) {
-      base.overlayOpacity = overlayOpacity;
+      base.overlayOpacity = currentOpacity;
     }
     if (needsFacts) {
       base.facts = facts;
@@ -121,7 +124,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, [
     mode,
     imageLibrary,
-    overlayOpacity,
+    currentOpacity,
     needsOverlayOpacity,
     needsFacts,
     needsList,
@@ -327,16 +330,23 @@ export function GeneratorApp(props: GeneratorAppProps) {
         {needsOverlayOpacity && (
           <div className="flex flex-col gap-2">
             <label className="flex items-center justify-between text-sm font-medium text-zinc-700">
-              <span>Overlay Opacity</span>
-              <span className="text-xs text-zinc-700">{overlayOpacity.toFixed(2)}</span>
+              <span>{opacityLabel}</span>
+              <span className="text-xs text-zinc-700">{currentOpacity.toFixed(2)}</span>
             </label>
             <input
               type="range"
               min={0.2}
               max={1}
               step={0.05}
-              value={overlayOpacity}
-              onChange={(event) => setOverlayOpacity(Number(event.target.value))}
+              value={currentOpacity}
+              onChange={(event) => {
+                const nextOpacity = Number(event.target.value);
+                if (mode === "full-fact") {
+                  setFullFactOpacity(nextOpacity);
+                } else {
+                  setOverlayOpacity(nextOpacity);
+                }
+              }}
             />
           </div>
         )}

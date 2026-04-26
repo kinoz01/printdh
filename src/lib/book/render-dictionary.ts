@@ -26,10 +26,7 @@ export async function renderDictionaryBook(options: DictionaryOptions = {}) {
   const imageAssets = await loadImageAssets(imageLibrary);
   const embeddedImages: { image: PDFImage; width: number; height: number }[] = [];
   for (const asset of imageAssets) {
-    const image =
-      asset.mimeType === "image/png" || asset.mimeType === "image/webp"
-        ? await pdf.embedPng(asset.bytes)
-        : await pdf.embedJpg(asset.bytes);
+    const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);
     embeddedImages.push({ image, width: asset.width, height: asset.height });
   }
   const fontCache = new Map<StandardFontName, PDFFont>();

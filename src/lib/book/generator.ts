@@ -135,6 +135,7 @@ export async function generateBook(payload: GenerateBookPayload) {
         entries,
         factsPerPage,
         imageLibrary,
+        overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.6),
         ...sharedPageOptions,
       });
     }

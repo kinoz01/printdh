@@ -14,13 +14,6 @@ import { hexToRgb } from "./colors";
 
 const PLACEHOLDER = "Add another fact for stack #{}.";
 
-const CARD_OVERLAY_CONFIG = createOverlayConfig({
-  showOnEven: true,
-  showOnOdd: false,
-  showNumber: true,
-  opacity: 0.6,
-});
-
 const STACK_LAYOUT = {
   marginX: 0.75 * 72,
   topMargin: 0.75 * 72,
@@ -32,6 +25,7 @@ export interface FullFactOptions {
   entries: TextEntry[];
   factsPerPage: number;
   imageLibrary?: string;
+  overlayOpacity?: number;
   pageWidth?: number;
   pageHeight?: number;
   totalPages?: number;
@@ -42,10 +36,17 @@ export async function renderFullFactBook(options: FullFactOptions) {
     entries,
     factsPerPage,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
+    overlayOpacity = 0.6,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
   } = options;
+  const cardOverlayConfig = createOverlayConfig({
+    showOnEven: true,
+    showOnOdd: false,
+    showNumber: true,
+    opacity: overlayOpacity,
+  });
   const evenPageCount = Math.floor(totalPages / 2);
   const overlaysNeeded = evenPageCount * factsPerPage;
   const filledEntries = padEntries(entries, overlaysNeeded, PLACEHOLDER).map((entry, index) => ({
@@ -70,10 +71,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
   const assets = await loadImageAssets(imageLibrary);
   const embeddedImages: PDFImage[] = [];
   for (const asset of assets) {
-    const image =
-      asset.mimeType === "image/png" || asset.mimeType === "image/webp"
-        ? await pdf.embedPng(asset.bytes)
-        : await pdf.embedJpg(asset.bytes);
+    const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);
     embeddedImages.push(image);
   }
 
@@ -82,7 +80,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     const page = pdf.addPage([pageWidth, pageHeight]);
     drawImageBackground(page, embeddedImages, assets, pageIndex, pageWidth, pageHeight);
     if (pageIndex % 2 === 1 && chunkIndex < chunks.length) {
-      await drawFactStack(page, chunks[chunkIndex], CARD_OVERLAY_CONFIG, getFont, pageWidth, pageHeight);
+      await drawFactStack(page, chunks[chunkIndex], cardOverlayConfig, getFont, pageWidth, pageHeight);
       chunkIndex++;
     }
   }

@@ -1,10 +1,12 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { imageSize } from "image-size";
+import sharp from "sharp";
 import type { ImageAsset, TemplateAsset } from "./types";
 import { orderBy } from "natural-orderby";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"]);
+type NormalizedPdfImage = Pick<ImageAsset, "bytes" | "mimeType">;
 
 export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
   const absolute = path.resolve(process.cwd(), folder);
@@ -34,11 +36,13 @@ export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
       if (!dimensions.width || !dimensions.height) {
         continue;
       }
+      const sourceMimeType = determineMimeType(dimensions.type) ?? determineMimeType(path.extname(file).toLowerCase());
+      const normalized = await normalizePdfCompatibleImage(bytes, sourceMimeType);
       assets.push({
-        bytes: bytes,
+        bytes: normalized.bytes,
         width: dimensions.width,
         height: dimensions.height,
-        mimeType: determineMimeType(file),
+        mimeType: normalized.mimeType,
       });
     } catch (error) {
       console.warn(`skip image ${file}: ${(error as Error).message}`);
@@ -92,24 +96,53 @@ export async function loadTemplateAssets(folder: string): Promise<TemplateAsset[
   return assets;
 }
 
-function determineMimeType(file: string): string {
-  const ext = path.extname(file).toLowerCase();
-  switch (ext) {
+function determineMimeType(identifier?: string | null): string | null {
+  switch ((identifier ?? "").toLowerCase()) {
     case ".png":
+    case "png":
       return "image/png";
     case ".jpg":
     case ".jpeg":
+    case "jpg":
+    case "jpeg":
       return "image/jpeg";
     case ".webp":
+    case "webp":
       return "image/webp";
     case ".bmp":
+    case "bmp":
       return "image/bmp";
     case ".tif":
     case ".tiff":
+    case "tif":
+    case "tiff":
       return "image/tiff";
+    case ".gif":
+    case "gif":
+      return "image/gif";
     default:
-      return "application/octet-stream";
+      return null;
   }
+}
+
+async function normalizePdfCompatibleImage(bytes: Uint8Array, mimeType: string | null): Promise<NormalizedPdfImage> {
+  if (mimeType === "image/png" || mimeType === "image/jpeg") {
+    return { bytes, mimeType };
+  }
+
+  const metadata = await sharp(bytes).metadata();
+
+  if (metadata.hasAlpha) {
+    return {
+      bytes: await sharp(bytes).png().toBuffer(),
+      mimeType: "image/png",
+    };
+  }
+
+  return {
+    bytes: await sharp(bytes).jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
+    mimeType: "image/jpeg",
+  };
 }
 
 function naturalKey(value: string) {

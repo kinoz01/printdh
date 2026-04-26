@@ -22,9 +22,10 @@ export async function drawNumberBadge(
   const font = await getFont(config.numberFontName);
   const text = number.toString().padStart(2, "0");
   const textWidth = font.widthOfTextAtSize(text, config.numberFontSize);
+  const textHeight = font.heightAtSize(config.numberFontSize, { descender: false });
   page.drawText(text, {
     x: centerX - textWidth / 2,
-    y: centerY - config.numberFontSize / 2,
+    y: centerY - textHeight / 2,
     size: config.numberFontSize,
     font,
     color: config.numberBadgeTextColor,
