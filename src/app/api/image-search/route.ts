@@ -46,6 +46,15 @@ type ProviderKeys = {
   braveKey?: string;
 };
 
+interface SearchOptions {
+  limit: number;
+  minFileSizeBytes?: number;
+  keys: ProviderKeys;
+  uniqueProviders: Provider[];
+  activeProviders: Provider[];
+  keywords: string[];
+}
+
 interface ProviderBucket {
   provider: Provider;
   results: GroupedImageResult[];
@@ -131,104 +140,118 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const payload = requestSchema.parse(body);
-    const limit = payload.limit ?? DEFAULT_LIMIT;
-    const minSizeKb = typeof payload.minSizeKb === "number" ? payload.minSizeKb : undefined;
-    const minFileSizeBytes = typeof minSizeKb === "number" && minSizeKb > 0 ? minSizeKb * 1024 : undefined;
-    const envDefaults = getServerProviderKeys();
-    const keys: ProviderKeys = {
-      googleApiKey: payload.keys?.googleApiKey || envDefaults.googleApiKey,
-      googleCx: payload.keys?.googleCx || envDefaults.googleCx,
-      pixabayKey: payload.keys?.pixabayKey || envDefaults.pixabayKey,
-      pexelsKey: payload.keys?.pexelsKey || envDefaults.pexelsKey,
-      braveKey: payload.keys?.braveKey || envDefaults.braveKey,
-    };
-    const uniqueProviders = Array.from(new Set(payload.providers)) as Provider[];
-    const keywords = buildKeywordList(payload.keywords, payload.query);
-    if (!keywords.length) {
+    const options = buildSearchOptions(payload);
+    if (!options.keywords.length) {
       return NextResponse.json({ error: "Provide at least one keyword" }, { status: 400 });
     }
-
-    const providerCounts = new Map<Provider, number>();
-    const providerErrors = new Map<Provider, string | null>();
-    for (const provider of uniqueProviders) {
-      providerCounts.set(provider, 0);
-      providerErrors.set(provider, null);
-    }
-
-    const keywordGroups: KeywordGroup[] = [];
-
-    for (const keyword of keywords) {
-      const providerPromises: Array<{ provider: Provider; promise: Promise<RemoteImageResult[]> }> = [];
-      for (const provider of uniqueProviders) {
-        const promise = buildProviderPromise(provider, keyword, limit, keys);
-        if (promise) {
-          providerPromises.push({ provider, promise });
-        }
-      }
-
-      if (!providerPromises.length) {
-        continue;
-      }
-
-      const providerResults = await Promise.all(
-        providerPromises.map(async ({ provider, promise }) => {
-          try {
-            const results = await promise;
-            return { provider, results, error: null as string | null };
-          } catch (error) {
-            return {
-              provider,
-              results: [] as RemoteImageResult[],
-              error: error instanceof Error ? error.message : "Request failed",
-            };
-          }
-        })
-      );
-
-      const providers: ProviderBucket[] = await Promise.all(
-        providerResults.map(async (item) => {
-          const deduped = dedupeResults(item.results);
-          const withSizes = await fillMissingFileSizes(deduped);
-          const filtered = applyFileSizeFilter(withSizes, minFileSizeBytes);
-          const limited = filtered.slice(0, limit);
-          const enriched: GroupedImageResult[] = limited.map((image) => ({
-            ...image,
-            provider: item.provider,
-            keyword,
-          }));
-          providerCounts.set(item.provider, (providerCounts.get(item.provider) ?? 0) + enriched.length);
-          if (item.error) {
-            providerErrors.set(item.provider, item.error);
-          }
-          return {
-            provider: item.provider,
-            results: enriched,
-            error: item.error,
-          };
-        })
-      );
-
-      keywordGroups.push({ keyword, providers });
-    }
-
-    if (!keywordGroups.length) {
+    if (!options.activeProviders.length) {
       return NextResponse.json({ error: "No providers enabled. Check your API keys." }, { status: 400 });
     }
 
-    const flattened = keywordGroups.flatMap((group) => group.providers.flatMap((bucket) => bucket.results));
-    const sources = uniqueProviders.map((provider) => ({
-      provider,
-      count: providerCounts.get(provider) ?? 0,
-      error: providerErrors.get(provider) ?? null,
-    }));
-
-    return NextResponse.json({ images: flattened, keywordGroups, sources });
+    const result = await runSearch(options);
+    return NextResponse.json(result);
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues.map((issue) => issue.message).join("; ") }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptions {
+  const limit = payload.limit ?? DEFAULT_LIMIT;
+  const minSizeKb = typeof payload.minSizeKb === "number" ? payload.minSizeKb : undefined;
+  const minFileSizeBytes = typeof minSizeKb === "number" && minSizeKb > 0 ? minSizeKb * 1024 : undefined;
+  const envDefaults = getServerProviderKeys();
+  const keys: ProviderKeys = {
+    googleApiKey: payload.keys?.googleApiKey || envDefaults.googleApiKey,
+    googleCx: payload.keys?.googleCx || envDefaults.googleCx,
+    pixabayKey: payload.keys?.pixabayKey || envDefaults.pixabayKey,
+    pexelsKey: payload.keys?.pexelsKey || envDefaults.pexelsKey,
+    braveKey: payload.keys?.braveKey || envDefaults.braveKey,
+  };
+  const uniqueProviders = Array.from(new Set(payload.providers)) as Provider[];
+  const activeProviders = uniqueProviders.filter((provider) => isProviderConfigured(provider, keys));
+  return {
+    limit,
+    minFileSizeBytes,
+    keys,
+    uniqueProviders,
+    activeProviders,
+    keywords: buildKeywordList(payload.keywords, payload.query),
+  };
+}
+
+async function runSearch(options: SearchOptions) {
+  const providerCounts = new Map<Provider, number>();
+  const providerErrors = new Map<Provider, string | null>();
+  for (const provider of options.uniqueProviders) {
+    providerCounts.set(provider, 0);
+    providerErrors.set(provider, null);
+  }
+
+  const keywordGroups: KeywordGroup[] = [];
+
+  for (const keyword of options.keywords) {
+    const providers = await Promise.all(
+      options.activeProviders.map((provider) =>
+        searchProviderForKeyword(provider, keyword, options.limit, options.minFileSizeBytes, options.keys)
+      )
+    );
+
+    for (const bucket of providers) {
+      providerCounts.set(bucket.provider, (providerCounts.get(bucket.provider) ?? 0) + bucket.results.length);
+      if (bucket.error && !providerErrors.get(bucket.provider)) {
+        providerErrors.set(bucket.provider, bucket.error);
+      }
+    }
+
+    keywordGroups.push({ keyword, providers });
+  }
+
+  const flattened = keywordGroups.flatMap((group) => group.providers.flatMap((bucket) => bucket.results));
+  const sources = options.uniqueProviders.map((provider) => ({
+    provider,
+    count: providerCounts.get(provider) ?? 0,
+    error: providerErrors.get(provider) ?? null,
+  }));
+
+  return { images: flattened, keywordGroups, sources };
+}
+
+async function searchProviderForKeyword(
+  provider: Provider,
+  keyword: string,
+  limit: number,
+  minFileSizeBytes: number | undefined,
+  keys: ProviderKeys
+): Promise<ProviderBucket> {
+  try {
+    const promise = buildProviderPromise(provider, keyword, limit, keys);
+    if (!promise) {
+      throw new Error("Provider not configured");
+    }
+    const rawResults = await promise;
+    const deduped = dedupeResults(rawResults);
+    const withSizes = await fillMissingFileSizes(deduped);
+    const filtered = applyFileSizeFilter(withSizes, minFileSizeBytes);
+    const limited = filtered.slice(0, limit);
+    return {
+      provider,
+      results: limited.map((image) => ({
+        ...image,
+        provider,
+        keyword,
+      })),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      provider,
+      results: [],
+      error: error instanceof Error ? error.message : "Request failed",
+    };
   }
 }
 
@@ -242,6 +265,23 @@ function buildKeywordList(keywords?: string[], fallbackQuery?: string | null) {
     }
   }
   return list.slice(0, 30);
+}
+
+function isProviderConfigured(provider: Provider, keys: ProviderKeys) {
+  switch (provider) {
+    case "scraping-win":
+      return true;
+    case "google":
+      return Boolean(keys.googleApiKey && keys.googleCx);
+    case "pixabay":
+      return Boolean(keys.pixabayKey);
+    case "pexels":
+      return Boolean(keys.pexelsKey);
+    case "brave":
+      return Boolean(keys.braveKey);
+    default:
+      return false;
+  }
 }
 
 function buildProviderPromise(provider: Provider, keyword: string, limit: number, keys: ProviderKeys) {

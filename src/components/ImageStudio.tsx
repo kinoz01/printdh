@@ -283,7 +283,6 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
       setProviderStatus(Array.isArray(payload.sources) ? payload.sources : null);
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : "Search failed");
-      setProviderStatus(null);
     } finally {
       setIsSearching(false);
     }
@@ -395,11 +394,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
   }, [keywordGroups]);
 
   const totalCandidates = useMemo(
-    () =>
-      keywordGroups.reduce(
-        (sum, group) => sum + group.providers.reduce((inner, bucket) => inner + bucket.results.length, 0),
-        0
-      ),
+    () => countImagesInKeywordGroups(keywordGroups),
     [keywordGroups]
   );
   const savedImageCount = library?.files.length ?? 0;
@@ -459,9 +454,9 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
 
   return (
     <div className="space-y-8">
-      <div className="sticky top-4 z-20 flex justify-end">
+      <div className="fixed right-4 bottom-4 z-20 sm:right-6 sm:bottom-6">
         <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur">
-          Images saved: {savedImageCount} · Next: {savedImageCount + 1}
+          Images saved: {savedImageCount}
         </div>
       </div>
       <section className="space-y-4">
@@ -632,8 +627,8 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
           {isSearching
             ? "Searching…"
             : keywords.length > 0
-            ? `Fetch images for ${keywords.length} keyword${keywords.length === 1 ? "" : "s"}`
-            : "Fetch images"}
+              ? `Fetch images for ${keywords.length} keyword${keywords.length === 1 ? "" : "s"}`
+              : "Fetch images"}
         </button>
         {searchError && <p className="text-sm text-red-600">{searchError}</p>}
         {providerStatus && (
@@ -709,11 +704,6 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
       <section className="space-y-4">
         <div className="flex flex-col gap-1">
           <h4 className="text-base font-semibold text-zinc-900">Image library</h4>
-          <p className="text-sm text-zinc-600">
-            Files are saved inside
-            <code className="mx-1 rounded bg-zinc-100 px-1">{library?.rootLabel ?? "../images"}</code>
-            .
-          </p>
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
           <div className="flex flex-col gap-2 md:flex-row">
@@ -808,6 +798,10 @@ function parseFileSizeInput(value: string) {
     return undefined;
   }
   return Math.round(parsed);
+}
+
+function countImagesInKeywordGroups(groups: KeywordGroup[]) {
+  return groups.reduce((sum, group) => sum + group.providers.reduce((inner, bucket) => inner + bucket.results.length, 0), 0);
 }
 
 function getProviderLabel(value: ProviderValue) {
