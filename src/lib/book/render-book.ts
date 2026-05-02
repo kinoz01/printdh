@@ -6,7 +6,7 @@ import { StandardFontName } from "./types";
 import { loadImageAssets } from "./assets";
 import { hexToRgb, mixColors } from "./colors";
 import { buildEntryStory, drawParagraphs, estimateStoryHeight, ParagraphLayout } from "./text-layout";
-import { drawNumberBadge } from "./overlay-helpers";
+import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
 
 export interface RenderBookOptions {
   entries: TextEntry[];
@@ -224,7 +224,7 @@ async function drawOverlay(
       config.useEntryAccentForFill && entry.accentColor ? entry.accentColor : config.fillColor;
     const strokeColor =
       config.useEntryAccentForStroke && entry.accentColor ? entry.accentColor : config.strokeColor;
-    page.drawRectangle({
+    drawRoundedRectangle(page, {
       x: overlayX,
       y: overlayY,
       width: overlayWidth,
@@ -232,6 +232,7 @@ async function drawOverlay(
       color: fillColor,
       borderColor: strokeColor,
       borderWidth: config.strokeWidth,
+      radius: config.roundness,
       opacity: config.opacity,
       borderOpacity: config.opacity,
     });

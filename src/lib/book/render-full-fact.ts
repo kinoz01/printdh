@@ -9,7 +9,7 @@ import { loadImageAssets } from "./assets";
 import { createOverlayConfig } from "./overlay-config";
 import { OverlayConfig, StandardFontName, TextEntry } from "./types";
 import { buildEntryStory, drawParagraphs, estimateStoryHeight, ParagraphLayout } from "./text-layout";
-import { drawNumberBadge } from "./overlay-helpers";
+import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
 import { hexToRgb } from "./colors";
 
 const PLACEHOLDER = "Add another fact for stack #{}.";
@@ -36,7 +36,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     entries,
     factsPerPage,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
-    overlayOpacity = 0.6,
+    overlayOpacity = 0.9,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
@@ -198,7 +198,7 @@ async function drawCard(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>
 ) {
-  page.drawRectangle({
+  drawRoundedRectangle(page, {
     x,
     y,
     width,
@@ -206,6 +206,7 @@ async function drawCard(
     color: config.fillColor,
     borderColor: config.strokeColor,
     borderWidth: config.strokeWidth,
+    radius: config.roundness,
     opacity: config.opacity,
     borderOpacity: config.opacity,
   });

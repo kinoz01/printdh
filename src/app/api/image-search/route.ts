@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       const providers: ProviderBucket[] = await Promise.all(
         providerResults.map(async (item) => {
           const deduped = dedupeResults(item.results);
-          const withSizes = await fillMissingFileSizes(deduped, minFileSizeBytes);
+          const withSizes = await fillMissingFileSizes(deduped);
           const filtered = applyFileSizeFilter(withSizes, minFileSizeBytes);
           const limited = filtered.slice(0, limit);
           const enriched: GroupedImageResult[] = limited.map((image) => ({
@@ -290,13 +290,10 @@ function dedupeResults(images: RemoteImageResult[]) {
 const FILE_SIZE_FETCH_CONCURRENCY = 5;
 const FILE_SIZE_TIMEOUT_MS = 5000;
 
-async function fillMissingFileSizes(images: RemoteImageResult[], minBytes: number | undefined) {
-  if (!minBytes) {
-    return images;
-  }
+async function fillMissingFileSizes(images: RemoteImageResult[]) {
   const targets: RemoteImageResult[] = [];
   for (const image of images) {
-    if (typeof image.fileSize === "number" && image.fileSize >= minBytes) {
+    if (typeof image.fileSize === "number") {
       continue;
     }
     if (!image.fullsizeUrl) {
@@ -305,7 +302,7 @@ async function fillMissingFileSizes(images: RemoteImageResult[], minBytes: numbe
     targets.push(image);
   }
   await runLimitedConcurrency(targets, FILE_SIZE_FETCH_CONCURRENCY, async (image) => {
-    if (typeof image.fileSize === "number" && image.fileSize >= minBytes) {
+    if (typeof image.fileSize === "number") {
       return;
     }
     const resolvedSize = await fetchFileSize(image.fullsizeUrl!, FILE_SIZE_TIMEOUT_MS);

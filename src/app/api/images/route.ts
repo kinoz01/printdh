@@ -53,10 +53,18 @@ export async function POST(request: NextRequest) {
       throw new Error("Failed to download image");
     }
     const arrayBuffer = await response.arrayBuffer();
+    const fileBytes = Buffer.from(arrayBuffer);
     const extension = pickExtension(response.headers.get("content-type"), payload.url);
-    const filename = buildFileName(payload.title, extension);
+    const baseFilename = buildBaseFileName(payload.title, extension);
+    const existingFiles = await collectImageFiles(IMAGES_ROOT);
+    const duplicate = findDuplicateImage(existingFiles, baseFilename, fileBytes.byteLength);
+    if (duplicate) {
+      await saveSourceMapping(payload.url, toPosixRelative(duplicate.relativePath));
+      return NextResponse.json({ savedAs: duplicate.relativePath, duplicate: true });
+    }
+    const filename = buildUniqueFileName(existingFiles, baseFilename);
     const filePath = ensureWithinRoot(path.join(targetDirectory, filename));
-    await fs.writeFile(filePath, Buffer.from(arrayBuffer));
+    await fs.writeFile(filePath, fileBytes);
 
     const savedAs = path.relative(IMAGES_ROOT, filePath) || path.basename(filePath);
     await appendFileToOrder(toRelativeFolderPath(targetDirectory), path.basename(filePath));
@@ -222,15 +230,32 @@ function pickExtension(contentType: string | null, url: string) {
   return ".jpg";
 }
 
-function buildFileName(title: string | undefined, extension: string) {
+function buildBaseFileName(title: string | undefined, extension: string) {
   const base = title?.trim() ? title.trim().slice(0, 60) : "image";
   const slug = base
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
-  const timestamp = Date.now();
-  return `${slug || "image"}-${timestamp}${extension}`;
+  return `${slug || "image"}${extension}`;
+}
+
+function buildUniqueFileName(files: RawCollectedFile[], baseFilename: string) {
+  const usedNames = new Set(files.map((file) => file.name));
+  if (!usedNames.has(baseFilename)) {
+    return baseFilename;
+  }
+  const extension = path.extname(baseFilename);
+  const stem = extension ? baseFilename.slice(0, -extension.length) : baseFilename;
+  let suffix = 2;
+  while (usedNames.has(`${stem}-${suffix}${extension}`)) {
+    suffix += 1;
+  }
+  return `${stem}-${suffix}${extension}`;
+}
+
+function findDuplicateImage(files: RawCollectedFile[], filename: string, size: number) {
+  return files.find((file) => file.name === filename && file.size === size) ?? null;
 }
 
 function ensureWithinRoot(targetPath: string) {

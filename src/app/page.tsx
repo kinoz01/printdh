@@ -1,7 +1,7 @@
 import { promises as fs } from "fs";
 import path from "path";
+import Link from "next/link";
 import { GeneratorApp } from "@/components/GeneratorApp";
-import { PdfCompressor } from "@/components/PdfCompressor";
 
 const DATA_DIR = path.resolve(process.cwd(), "..", "data");
 
@@ -24,15 +24,15 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen bg-zinc-50 py-12">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4">
-        <header className="flex flex-col gap-3">
-          <p className="text-sm font-semibold uppercase tracking-wide text-zinc-700">
-            Facts Picture Book Studio
-          </p>
-          <h1 className="text-3xl font-semibold text-zinc-900">
-            Convert your Python book recipes into a browser-based workflow.
-          </h1>
-          <p className="text-sm text-zinc-700">
-            Drop in the same JSON/text files you used for the CLI scripts, tweak overlay settings, and download a PDF directly from the Next.js app.
+        <header className="relative flex flex-col items-center gap-3 text-center">
+          <Link
+            href="/compressor"
+            className="absolute right-0 top-0 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+          >
+            Compressor
+          </Link>
+          <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
+            Picture Book Studio
           </p>
         </header>
         <GeneratorApp
@@ -41,7 +41,6 @@ export default async function HomePage() {
           initialListDescription={listDescription}
           defaultImageLibrary="../images"
         />
-        <PdfCompressor />
       </div>
     </main>
   );

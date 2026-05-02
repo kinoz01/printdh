@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ImageStudio } from "./ImageStudio";
 
 const MODES = [
@@ -78,14 +78,47 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [listDescription, setListDescription] = useState(props.initialListDescription ?? "");
   const [imageLibrary, setImageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
-  const [pageCount, setPageCount] = useState(59);
-  const [overlayOpacity, setOverlayOpacity] = useState(0.75);
-  const [fullFactOpacity, setFullFactOpacity] = useState(0.6);
+  const [pageCount, setPageCount] = useState(40);
+  const [overlayOpacity, setOverlayOpacity] = useState(0.9);
+  const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
   const [factsPerPage, setFactsPerPage] = useState(3);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const syncStepFromLocation = useCallback(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    setStep(parseWizardStep(params.get("step")));
+  }, []);
+
+  const navigateToStep = useCallback((nextStep: WizardStep) => {
+    if (typeof window === "undefined") {
+      setStep(nextStep);
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    if (nextStep === 1) {
+      params.delete("step");
+    } else {
+      params.set("step", String(nextStep));
+    }
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`;
+    window.history.pushState(null, "", nextUrl);
+    setStep(nextStep);
+  }, []);
+
+  useEffect(() => {
+    syncStepFromLocation();
+    window.addEventListener("popstate", syncStepFromLocation);
+    return () => {
+      window.removeEventListener("popstate", syncStepFromLocation);
+    };
+  }, [syncStepFromLocation]);
 
   const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
@@ -175,10 +208,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
         <section className="space-y-4">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 1</p>
-            <h2 className="text-xl font-semibold text-zinc-900">Choose a layout recipe</h2>
-            <p className="text-sm text-zinc-700">
-              Pick the book flow you want to generate. Each card includes a placeholder preview—swap the imagery later.
-            </p>
+            <h2 className="text-xl font-semibold text-zinc-900">Choose a layout</h2>
+            <p className="text-sm text-zinc-700">Pick the book template you want to generate.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {MODES.map((item) => {
@@ -202,7 +233,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   <div className="flex flex-1 flex-col gap-2 p-4">
                     <span className="text-sm font-semibold text-zinc-900">{item.label}</span>
                     <p className="text-xs text-zinc-700">{item.description}</p>
-                    {isActive && <span className="mt-auto text-xs font-medium text-emerald-600">Selected</span>}
+                    <span
+                      className={`mt-auto text-xs font-medium ${
+                        isActive ? "text-emerald-600" : "invisible"
+                      }`}
+                    >
+                      Selected
+                    </span>
                   </div>
                 </button>
               );
@@ -211,7 +248,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="flex justify-end">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => navigateToStep(2)}
               className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
             >
               Next: Book specs
@@ -225,7 +262,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 2</p>
             <h3 className="text-lg font-semibold text-zinc-900">Select page size & length</h3>
-            <p className="text-sm text-zinc-700">Pick a trim size and tell us how many pages to include in the PDF.</p>
+            <p className="text-sm text-zinc-700">Pick a trim size and how many pages to include in the PDF.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {PAGE_SIZES.map((option) => {
@@ -259,19 +296,18 @@ export function GeneratorApp(props: GeneratorAppProps) {
               }}
               className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
             />
-            <p className="text-xs text-zinc-700">Odd numbers start/end on a single page spread; even counts give full pairs.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
             <button
               type="button"
-              onClick={() => setStep(1)}
+              onClick={() => navigateToStep(1)}
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
             >
               Back to templates
             </button>
             <button
               type="button"
-              onClick={() => setStep(3)}
+              onClick={() => navigateToStep(3)}
               className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
             >
               Next: Fetch imagery
@@ -286,14 +322,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
-              onClick={() => setStep(2)}
+              onClick={() => navigateToStep(2)}
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
             >
               Back: Page specs
             </button>
             <button
               type="button"
-              onClick={() => setStep(4)}
+              onClick={() => navigateToStep(4)}
               className="w-full rounded-md bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 sm:w-auto"
             >
               Next: Configure content
@@ -422,7 +458,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
-              onClick={() => setStep(3)}
+              onClick={() => navigateToStep(3)}
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
             >
               Back: Image studio
@@ -443,4 +479,17 @@ export function GeneratorApp(props: GeneratorAppProps) {
       )}
     </div>
   );
+}
+
+function parseWizardStep(value: string | null): WizardStep {
+  switch (value) {
+    case "2":
+      return 2;
+    case "3":
+      return 3;
+    case "4":
+      return 4;
+    default:
+      return 1;
+  }
 }

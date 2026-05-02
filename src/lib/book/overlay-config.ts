@@ -12,7 +12,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   verticalPadding: 0.2 * 72,
   minHeight: 0.5 * 72,
   maxHeight: PAGE_HEIGHT * 0.32,
-  opacity: 0.75,
+  opacity: 0.9,
   roundness: 16,
   titleStyle: TITLE_STYLE,
   bodyStyle: FACT_STYLE,

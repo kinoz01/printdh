@@ -3,7 +3,6 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { DragEvent } from "react";
 
 const PROVIDERS = [
   {
@@ -82,15 +81,8 @@ interface LibraryFile {
   previewUrl: string;
 }
 
-interface LibraryFolder {
-  name: string;
-  relativePath: string;
-  fileCount: number;
-}
-
 interface LibraryPayload {
   rootLabel: string;
-  folders: LibraryFolder[];
   files: LibraryFile[];
   sourcesByUrl?: Record<string, string>;
 }
@@ -103,6 +95,11 @@ interface ProviderStatus {
   provider: string;
   count: number;
   error?: string | null;
+}
+
+interface SaveImageResponse {
+  savedAs: string;
+  duplicate?: boolean;
 }
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
@@ -125,17 +122,9 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
-  const [folderInput, setFolderInput] = useState("");
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
-  const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
-  const [draggingItem, setDraggingItem] = useState<{ folder: string; index: number } | null>(null);
-  const [dragTarget, setDragTarget] = useState<{
-    folder: string;
-    index: number;
-    position: "before" | "after";
-  } | null>(null);
   const [serverProviderSupport, setServerProviderSupport] = useState<Record<ProviderValue, boolean> | null>(null);
 
   const refreshLibrary = useCallback(async () => {
@@ -311,15 +300,17 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
           body: JSON.stringify({
             url: image.fullsizeUrl || image.previewUrl,
             title: image.title,
-            folder: folderInput.trim() || undefined,
           }),
         });
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail.error || "Failed to save image");
         }
-        const { savedAs } = await response.json();
-        setSaveMessage({ text: `Saved to ${savedAs}`, tone: "success" });
+        const { savedAs, duplicate } = (await response.json()) as SaveImageResponse;
+        setSaveMessage({
+          text: duplicate ? `Already saved as ${savedAs}` : `Saved to ${savedAs}`,
+          tone: "success",
+        });
         await refreshLibrary();
       } catch (error) {
         setSaveMessage({
@@ -330,7 +321,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         setSavingId(null);
       }
     },
-    [folderInput, refreshLibrary]
+    [refreshLibrary]
   );
 
   const handleDeleteFile = useCallback(
@@ -386,123 +377,6 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     }
   }, [refreshLibrary]);
 
-  const persistFolderOrder = useCallback(
-    async (folderKey: string, files: LibraryFile[]) => {
-      if (files.length === 0) {
-        return;
-      }
-      setReorderingFolder(folderKey);
-      setLibraryNotice(null);
-      try {
-        const payload = files.map((file) => getFileNameFromRelativePath(file.relativePath));
-        const response = await fetch("/api/images", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            folder: folderKey || undefined,
-            order: payload,
-          }),
-        });
-        if (!response.ok) {
-          const detail = await response.json().catch(() => ({}));
-          throw new Error(detail.error || "Unable to reorder images");
-        }
-        setLibraryNotice({ text: "Order updated", tone: "success" });
-        await refreshLibrary();
-      } catch (error) {
-        setLibraryNotice({
-          text: error instanceof Error ? error.message : "Unable to reorder images",
-          tone: "error",
-        });
-      } finally {
-        setReorderingFolder(null);
-      }
-    },
-    [refreshLibrary]
-  );
-
-  const handleMoveFile = useCallback(
-    (folderKey: string, files: LibraryFile[], fromIndex: number, toIndex: number) => {
-      if (fromIndex === toIndex || fromIndex < 0 || fromIndex >= files.length) {
-        return;
-      }
-      const boundedTarget = Math.max(0, Math.min(toIndex, files.length));
-      const updated = [...files];
-      const [moved] = updated.splice(fromIndex, 1);
-      const insertIndex =
-        boundedTarget > updated.length ? updated.length : Math.max(0, Math.min(boundedTarget, updated.length));
-      updated.splice(insertIndex, 0, moved);
-      setLibrary((current) => {
-        if (!current) {
-          return current;
-        }
-        const nextFiles = [...current.files];
-        const positions = nextFiles
-          .map((file, index) => ({ file, index }))
-          .filter((entry) => extractFolderName(entry.file.relativePath) === folderKey);
-        updated.forEach((file, index) => {
-          const slot = positions[index];
-          if (slot) {
-            nextFiles[slot.index] = file;
-          }
-        });
-        return { ...current, files: nextFiles };
-      });
-      void persistFolderOrder(folderKey, updated);
-    },
-    [persistFolderOrder]
-  );
-
-  const beginDrag = useCallback((event: DragEvent<HTMLLIElement>, folderKey: string, index: number) => {
-    if (event.dataTransfer) {
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", "");
-    }
-    setDragTarget(null);
-    setDraggingItem({ folder: folderKey, index });
-  }, []);
-
-  const handleDragOverItem = useCallback(
-    (event: DragEvent<HTMLLIElement>, folderKey: string, index: number) => {
-      if (!draggingItem || draggingItem.folder !== folderKey) {
-        return;
-      }
-      event.preventDefault();
-      if (event.dataTransfer) {
-        event.dataTransfer.dropEffect = "move";
-      }
-      const rect = event.currentTarget.getBoundingClientRect();
-      const shouldPlaceAfter = event.clientY - rect.top > rect.height / 2;
-      setDragTarget({ folder: folderKey, index, position: shouldPlaceAfter ? "after" : "before" });
-    },
-    [draggingItem]
-  );
-
-  const handleDropItem = useCallback(
-    (event: DragEvent<HTMLLIElement>, folderKey: string, files: LibraryFile[], index: number) => {
-      if (!draggingItem || draggingItem.folder !== folderKey) {
-        return;
-      }
-      event.preventDefault();
-      const rect = event.currentTarget.getBoundingClientRect();
-      const shouldPlaceAfter = event.clientY - rect.top > rect.height / 2;
-      const destinationIndex = shouldPlaceAfter ? index + 1 : index;
-      const fromIndex = draggingItem.index;
-      setDragTarget(null);
-      setDraggingItem(null);
-      if (fromIndex === index) {
-        return;
-      }
-      handleMoveFile(folderKey, files, fromIndex, destinationIndex);
-    },
-    [draggingItem, handleMoveFile]
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setDragTarget(null);
-    setDraggingItem(null);
-  }, []);
-
   const providerBuckets = useMemo(() => {
     const map = new Map<ProviderValue, { provider: ProviderValue; keywords: Array<{ keyword: string; results: ImageResult[]; error: string | null }> }>();
     for (const group of keywordGroups) {
@@ -520,42 +394,6 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     return Array.from(map.values());
   }, [keywordGroups]);
 
-  const libraryGroups = useMemo(() => {
-    if (!library) {
-      return [];
-    }
-    const groups = new Map<string, { label: string; files: LibraryFile[] }>();
-    const ensureGroup = (key: string, label?: string) => {
-      const resolvedLabel = label || (key ? key : "Root");
-      if (!groups.has(key)) {
-        groups.set(key, { label: resolvedLabel, files: [] });
-      }
-      return groups.get(key)!;
-    };
-    for (const folder of library.folders) {
-      ensureGroup(folder.relativePath, folder.name);
-    }
-    for (const file of library.files) {
-      const folderKey = extractFolderName(file.relativePath);
-      ensureGroup(folderKey, folderKey || "Root").files.push(file);
-    }
-    return Array.from(groups.entries())
-      .map(([key, value]) => ({
-        key,
-        label: value.label,
-        files: value.files,
-      }))
-      .sort((a, b) => {
-        if (a.key === "" && b.key !== "") {
-          return -1;
-        }
-        if (a.key !== "" && b.key === "") {
-          return 1;
-        }
-        return a.label.localeCompare(b.label);
-      });
-  }, [library]);
-
   const totalCandidates = useMemo(
     () =>
       keywordGroups.reduce(
@@ -564,6 +402,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
       ),
     [keywordGroups]
   );
+  const savedImageCount = library?.files.length ?? 0;
 
   const renderResultCard = (result: ImageResult, uniqueKey?: string) => {
     const sourceUrl = result.fullsizeUrl || result.previewUrl;
@@ -611,7 +450,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
                 : "border-zinc-300 text-zinc-800 hover:border-black"
             } disabled:opacity-60`}
           >
-            {savedPath ? (isRemoving ? "Removing…" : "Remove from images") : isSaving ? "Saving…" : "Add to images folder"}
+            {savedPath ? (isRemoving ? "Removing…" : "Remove from images") : isSaving ? "Saving…" : "Add to images"}
           </button>
         </div>
       </article>
@@ -620,6 +459,11 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
 
   return (
     <div className="space-y-8">
+      <div className="sticky top-4 z-20 flex justify-end">
+        <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur">
+          Images saved: {savedImageCount} · Next: {savedImageCount + 1}
+        </div>
+      </div>
       <section className="space-y-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Step 3</p>
@@ -868,20 +712,10 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
           <p className="text-sm text-zinc-600">
             Files are saved inside
             <code className="mx-1 rounded bg-zinc-100 px-1">{library?.rootLabel ?? "../images"}</code>
-            . Use a subfolder to keep upcoming downloads organized.
+            .
           </p>
         </div>
         <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <label className="flex-1 text-sm font-medium text-zinc-700">
-            <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">Destination subfolder</span>
-            <input
-              type="text"
-              value={folderInput}
-              onChange={(event) => setFolderInput(event.target.value)}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-              placeholder="modern-architecture"
-            />
-          </label>
           <div className="flex flex-col gap-2 md:flex-row">
             <button
               type="button"
@@ -906,93 +740,52 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         )}
         {libraryError && <p className="text-sm text-red-600">{libraryError}</p>}
         {!library && <p className="text-sm text-zinc-500">Loading library…</p>}
-        {library && libraryGroups.length > 0 && (
-          <div className="space-y-5">
-            {libraryGroups.map((group) => (
-              <div key={group.key || "root"} className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <div className="flex flex-col">
-                    <p className="font-semibold text-zinc-900">{group.key ? group.label : "Root folder"}</p>
-                    {reorderingFolder === group.key && (
-                      <span className="text-xs font-medium text-emerald-600">Saving order…</span>
-                    )}
+        {library && library.files.length > 0 && (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+              <p className="font-semibold text-zinc-900">Saved images</p>
+              <span className="text-xs text-zinc-500">
+                {library.files.length} image{library.files.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <ul className="space-y-2">
+              {library.files.map((file) => (
+                <li
+                  key={file.relativePath}
+                  className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/60 p-3 text-sm sm:flex-row sm:items-center"
+                >
+                  <div className="flex items-center gap-3 sm:flex-1">
+                    <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
+                      <img
+                        src={file.previewUrl}
+                        alt={file.name}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <p className="truncate font-medium text-zinc-900">{file.name}</p>
+                      <p className="text-xs text-zinc-500">
+                        {formatFileSize(file.size)} · {file.relativePath}
+                      </p>
+                    </div>
                   </div>
-                  <span className="text-xs text-zinc-500">
-                    {group.files.length} image{group.files.length === 1 ? "" : "s"}
-                  </span>
-                </div>
-                {group.files.length === 0 ? (
-                  <p className="text-sm text-zinc-500">Empty folder</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {group.files.map((file, index) => {
-                      const isDragSource =
-                        draggingItem && draggingItem.folder === group.key && draggingItem.index === index;
-                      const dropPosition =
-                        dragTarget && dragTarget.folder === group.key && dragTarget.index === index
-                          ? dragTarget.position
-                          : null;
-                      const disableDragging = reorderingFolder === group.key;
-                      return (
-                        <li
-                          key={file.relativePath}
-                          className={`relative flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/60 p-3 text-sm sm:flex-row sm:items-center ${
-                            isDragSource ? "opacity-50" : ""
-                          }`}
-                          draggable={!disableDragging}
-                          onDragStart={(event) => beginDrag(event, group.key, index)}
-                          onDragEnd={handleDragEnd}
-                          onDragOver={(event) => handleDragOverItem(event, group.key, index)}
-                          onDrop={(event) => handleDropItem(event, group.key, group.files, index)}
-                        >
-                          {dropPosition && (
-                            <span
-                              className={`pointer-events-none absolute left-3 right-3 h-0.5 bg-black ${
-                                dropPosition === "before" ? "top-1" : "bottom-1"
-                              }`}
-                            />
-                          )}
-                          <div className="flex items-center gap-3 sm:flex-1">
-                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
-                              <img
-                                src={file.previewUrl}
-                                alt={file.name}
-                                loading="lazy"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                              <p className="truncate font-medium text-zinc-900">{file.name}</p>
-                              <p className="text-xs text-zinc-500">
-                                {formatFileSize(file.size)} · {file.relativePath}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2 sm:w-48">
-                            <p className="text-xs text-zinc-500">
-                              Drag to reorder · {index + 1} / {group.files.length}
-                            </p>
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteFile(file.relativePath)}
-                              disabled={deletingPath === file.relativePath}
-                              className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
-                            >
-                              {deletingPath === file.relativePath ? "Removing…" : "Remove"}
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))}
+                  <div className="sm:w-32">
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteFile(file.relativePath)}
+                      disabled={deletingPath === file.relativePath}
+                      className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
+                    >
+                      {deletingPath === file.relativePath ? "Removing…" : "Remove"}
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
-        {library && library.files.length === 0 && library.folders.length === 0 && (
-          <p className="text-sm text-zinc-500">No images saved yet.</p>
-        )}
+        {library && library.files.length === 0 && <p className="text-sm text-zinc-500">No images saved yet.</p>}
       </section>
     </div>
   );
@@ -1029,20 +822,4 @@ function formatFileSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
-}
-
-function extractFolderName(relativePath: string) {
-  if (!relativePath.includes("/")) {
-    return "";
-  }
-  const parts = relativePath.split("/");
-  return parts.slice(0, -1).join("/");
-}
-
-function getFileNameFromRelativePath(relativePath: string) {
-  if (!relativePath) {
-    return "";
-  }
-  const parts = relativePath.split("/");
-  return parts[parts.length - 1] || relativePath;
 }

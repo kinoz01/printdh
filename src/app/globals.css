@@ -25,9 +25,19 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 input,
-textarea {
+textarea,
+select {
   color: #0f0f0f;
+}
+
+option {
+  color: #0f0f0f;
+  background: #ffffff;
 }
 
 input::placeholder,

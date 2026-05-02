@@ -79,9 +79,7 @@ export function PdfCompressor() {
     <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-zinc-900">Compress a PDF for printing</h2>
-        <p className="text-sm text-zinc-700">
-          Upload a PDF and download a smaller, print-friendly copy. Default preset keeps quality high.
-        </p>
+        <p className="text-sm text-zinc-700">Upload a PDF and download a smaller, print-friendly copy.</p>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -105,7 +103,7 @@ export function PdfCompressor() {
           <select
             value={quality}
             onChange={(event) => setQuality(event.target.value as QualityPreset)}
-            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm"
+            className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
           >
             <option value="printer">Printer (recommended)</option>
             <option value="prepress">Prepress (highest quality)</option>
@@ -135,9 +133,6 @@ export function PdfCompressor() {
       </div>
 
       {error && <p className="mt-3 text-sm font-medium text-red-600">{error}</p>}
-      <p className="mt-3 text-xs text-zinc-500">
-        Server-side compression requires Ghostscript (gs) or qpdf installed on the host.
-      </p>
     </section>
   );
 }

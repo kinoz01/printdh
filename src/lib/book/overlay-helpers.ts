@@ -1,6 +1,8 @@
 import { PDFPage, PDFFont } from "pdf-lib";
 import { OverlayConfig, StandardFontName } from "./types";
 
+type RectangleOptions = NonNullable<Parameters<PDFPage["drawRectangle"]>[0]>;
+
 export async function drawNumberBadge(
   page: PDFPage,
   number: number,
@@ -42,4 +44,70 @@ export async function drawNumberBadge(
       color: config.numberLabelColor,
     });
   }
+}
+
+export function drawRoundedRectangle(
+  page: PDFPage,
+  {
+    x,
+    y,
+    width,
+    height,
+    radius,
+    color,
+    borderColor,
+    borderWidth,
+    opacity,
+    borderOpacity,
+  }: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    radius: number;
+    color: RectangleOptions["color"];
+    borderColor: RectangleOptions["borderColor"];
+    borderWidth: number;
+    opacity: number;
+    borderOpacity: number;
+  }
+) {
+  const clampedRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
+  if (clampedRadius === 0) {
+    page.drawRectangle({
+      x,
+      y,
+      width,
+      height,
+      color,
+      borderColor,
+      borderWidth,
+      opacity,
+      borderOpacity,
+    });
+    return;
+  }
+  const path = [
+    `M ${clampedRadius} 0`,
+    `H ${width - clampedRadius}`,
+    `A ${clampedRadius} ${clampedRadius} 0 0 1 ${width} ${clampedRadius}`,
+    `V ${height - clampedRadius}`,
+    `A ${clampedRadius} ${clampedRadius} 0 0 1 ${width - clampedRadius} ${height}`,
+    `H ${clampedRadius}`,
+    `A ${clampedRadius} ${clampedRadius} 0 0 1 0 ${height - clampedRadius}`,
+    `V ${clampedRadius}`,
+    `A ${clampedRadius} ${clampedRadius} 0 0 1 ${clampedRadius} 0`,
+    "Z",
+  ].join(" ");
+  page.drawSvgPath(path, {
+    x,
+    // pdf-lib draws SVG paths from a top-left style origin after flipping the Y axis,
+    // so shift by height to preserve the same bottom-left anchor as drawRectangle().
+    y: y + height,
+    color,
+    borderColor,
+    borderWidth,
+    opacity,
+    borderOpacity,
+  });
 }

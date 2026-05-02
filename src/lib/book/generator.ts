@@ -29,7 +29,7 @@ export interface GenerateBookPayload {
 
 export async function generateBook(payload: GenerateBookPayload) {
   const imageLibrary = payload.imageLibrary || DEFAULT_IMAGE_LIBRARY;
-  const opacity = clampOpacity(payload.overlayOpacity ?? 0.75);
+  const opacity = clampOpacity(payload.overlayOpacity ?? 0.9);
   const pageSettings = resolvePageSettings(payload.pageSize, payload.pageCount);
   const sharedPageOptions = {
     pageWidth: pageSettings.width,
@@ -79,7 +79,7 @@ export async function generateBook(payload: GenerateBookPayload) {
           showOnOdd: true,
           minHeight: 0.8 * 72,
           maxHeight: 1 * 72,
-          opacity: clampOpacity(payload.overlayOpacity ?? 0.6),
+          opacity: clampOpacity(payload.overlayOpacity ?? 0.9),
         },
         ...sharedPageOptions,
       });
@@ -135,7 +135,7 @@ export async function generateBook(payload: GenerateBookPayload) {
         entries,
         factsPerPage,
         imageLibrary,
-        overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.6),
+        overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.9),
         ...sharedPageOptions,
       });
     }
@@ -153,7 +153,7 @@ export async function generateBook(payload: GenerateBookPayload) {
 
 function clampOpacity(value: number) {
   if (Number.isNaN(value)) {
-    return 0.75;
+    return 0.9;
   }
   return Math.min(1, Math.max(0, value));
 }
