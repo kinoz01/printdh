@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
 
 const PROVIDERS = [
   {
@@ -87,6 +87,12 @@ interface LibraryPayload {
   sourcesByUrl?: Record<string, string>;
 }
 
+interface LibrarySection {
+  folderKey: string;
+  label: string;
+  files: LibraryFile[];
+}
+
 interface ImageStudioProps {
   defaultLimit?: number;
 }
@@ -100,6 +106,25 @@ interface ProviderStatus {
 interface SaveImageResponse {
   savedAs: string;
   duplicate?: boolean;
+}
+
+interface ImageLibraryPanelProps {
+  library: LibraryPayload | null;
+  libraryError: string | null;
+  libraryNotice: { text: string; tone: "success" | "error" } | null;
+  loadingLibrary: boolean;
+  removingAll: boolean;
+  deletingPath: string | null;
+  onRefresh: () => Promise<void>;
+  onRemoveAll: () => Promise<void>;
+  onDeleteFile: (relativePath: string) => Promise<void>;
+  onReorder: (folderKey: string, nextFiles: LibraryFile[]) => Promise<void>;
+}
+
+interface DragState {
+  activePath: string;
+  folderKey: string;
+  overIndex: number | null;
 }
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
@@ -398,6 +423,45 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     [keywordGroups]
   );
   const savedImageCount = library?.files.length ?? 0;
+
+  const handleReorderLibrary = useCallback(
+    async (folderKey: string, nextFiles: LibraryFile[]) => {
+      const previousFiles = library?.files ?? [];
+      setLibrary((current) => (current ? { ...current, files: nextFiles } : current));
+      setLibraryNotice(null);
+      try {
+        const response = await fetch("/api/images", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            folder: folderKey || undefined,
+            order: nextFiles
+              .filter((file) => getFolderKeyFromRelativePath(file.relativePath) === folderKey)
+              .map((file) => file.name),
+          }),
+        });
+        if (!response.ok) {
+          const detail = await response.json().catch(() => ({}));
+          throw new Error(detail.error || "Failed to save image order");
+        }
+        setLibraryNotice({
+          text: folderKey ? `Saved image order for ${folderKey}` : "Saved image order",
+          tone: "success",
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to save image order";
+        setLibrary((current) => (current ? { ...current, files: previousFiles } : current));
+        setLibraryNotice({
+          text: message,
+          tone: "error",
+        });
+        throw error instanceof Error ? error : new Error(message);
+      }
+    },
+    [library]
+  );
 
   const renderResultCard = (result: ImageResult, uniqueKey?: string) => {
     const sourceUrl = result.fullsizeUrl || result.previewUrl;
@@ -701,83 +765,351 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         )}
       </section>
 
-      <section className="space-y-4">
-        <div className="flex flex-col gap-1">
-          <h4 className="text-base font-semibold text-zinc-900">Image library</h4>
-        </div>
-        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <div className="flex flex-col gap-2 md:flex-row">
-            <button
-              type="button"
-              onClick={() => void refreshLibrary()}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:border-black"
-              disabled={loadingLibrary}
-            >
-              {loadingLibrary ? "Refreshing…" : "Refresh library"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleRemoveAll()}
-              disabled={removingAll || !library || library.files.length === 0}
-              className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
-            >
-              {removingAll ? "Removing…" : "Remove all images"}
-            </button>
-          </div>
-        </div>
-        {libraryNotice && (
-          <p className={`text-sm ${libraryNotice.tone === "success" ? "text-emerald-600" : "text-red-600"}`}>{libraryNotice.text}</p>
-        )}
-        {libraryError && <p className="text-sm text-red-600">{libraryError}</p>}
-        {!library && <p className="text-sm text-zinc-500">Loading library…</p>}
-        {library && library.files.length > 0 && (
-          <div className="rounded-xl border border-zinc-200 bg-white p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
-              <p className="font-semibold text-zinc-900">Saved images</p>
-              <span className="text-xs text-zinc-500">
-                {library.files.length} image{library.files.length === 1 ? "" : "s"}
-              </span>
-            </div>
-            <ul className="space-y-2">
-              {library.files.map((file) => (
-                <li
-                  key={file.relativePath}
-                  className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/60 p-3 text-sm sm:flex-row sm:items-center"
-                >
-                  <div className="flex items-center gap-3 sm:flex-1">
-                    <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
-                      <img
-                        src={file.previewUrl}
-                        alt={file.name}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <p className="truncate font-medium text-zinc-900">{file.name}</p>
-                      <p className="text-xs text-zinc-500">
-                        {formatFileSize(file.size)} · {file.relativePath}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="sm:w-32">
-                    <button
-                      type="button"
-                      onClick={() => void handleDeleteFile(file.relativePath)}
-                      disabled={deletingPath === file.relativePath}
-                      className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
-                    >
-                      {deletingPath === file.relativePath ? "Removing…" : "Remove"}
-                    </button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {library && library.files.length === 0 && <p className="text-sm text-zinc-500">No images saved yet.</p>}
-      </section>
+      <ImageLibraryPanel
+        library={library}
+        libraryError={libraryError}
+        libraryNotice={libraryNotice}
+        loadingLibrary={loadingLibrary}
+        removingAll={removingAll}
+        deletingPath={deletingPath}
+        onRefresh={refreshLibrary}
+        onRemoveAll={handleRemoveAll}
+        onDeleteFile={handleDeleteFile}
+        onReorder={handleReorderLibrary}
+      />
     </div>
+  );
+}
+
+function ImageLibraryPanel({
+  library,
+  libraryError,
+  libraryNotice,
+  loadingLibrary,
+  removingAll,
+  deletingPath,
+  onRefresh,
+  onRemoveAll,
+  onDeleteFile,
+  onReorder,
+}: ImageLibraryPanelProps) {
+  const [displayFiles, setDisplayFiles] = useState<LibraryFile[]>(library?.files ?? []);
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
+  const [isRemoveAllDialogOpen, setIsRemoveAllDialogOpen] = useState(false);
+
+  useEffect(() => {
+    setDisplayFiles(library?.files ?? []);
+  }, [library]);
+
+  useEffect(() => {
+    if (!isRemoveAllDialogOpen) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !removingAll) {
+        setIsRemoveAllDialogOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isRemoveAllDialogOpen, removingAll]);
+
+  const librarySections = useMemo<LibrarySection[]>(() => buildLibrarySections(displayFiles), [displayFiles]);
+  const removeAllCount = displayFiles.length;
+
+  const handleDragStart = useCallback(
+    (event: DragEvent<HTMLLIElement>, file: LibraryFile) => {
+      if (reorderingFolder !== null) {
+        event.preventDefault();
+        return;
+      }
+      const folderKey = getFolderKeyFromRelativePath(file.relativePath);
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", file.relativePath);
+      setDragState({
+        activePath: file.relativePath,
+        folderKey,
+        overIndex: null,
+      });
+    },
+    [reorderingFolder]
+  );
+
+  const handleSectionDragOver = useCallback(
+    (event: DragEvent<HTMLUListElement>, folderKey: string) => {
+      if (!dragState || dragState.folderKey !== folderKey) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const overIndex = getDropIndexFromList(event.currentTarget, event.clientY);
+      if (dragState.overIndex === overIndex) {
+        return;
+      }
+      setDragState((current) => {
+        if (!current || current.folderKey !== folderKey) {
+          return current;
+        }
+        return {
+          ...current,
+          overIndex,
+        };
+      });
+    },
+    [dragState]
+  );
+
+  const handleSectionDrop = useCallback(
+    async (event: DragEvent<HTMLUListElement>, folderKey: string) => {
+      event.preventDefault();
+      if (!dragState || dragState.folderKey !== folderKey || !library) {
+        setDragState(null);
+        return;
+      }
+      const targetIndex = getDropIndexFromList(event.currentTarget, event.clientY);
+      const reorder = reorderLibraryFiles(displayFiles, dragState.activePath, folderKey, targetIndex);
+      const previousFiles = displayFiles;
+      setDragState(null);
+      if (!reorder) {
+        return;
+      }
+      setDisplayFiles(reorder.files);
+      setReorderingFolder(folderKey);
+      try {
+        await onReorder(folderKey, reorder.files);
+      } catch {
+        setDisplayFiles(previousFiles);
+      } finally {
+        setReorderingFolder(null);
+      }
+    },
+    [displayFiles, dragState, library, onReorder]
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  const handleOpenRemoveAllDialog = useCallback(() => {
+    if (reorderingFolder !== null || removingAll || removeAllCount === 0) {
+      return;
+    }
+    setIsRemoveAllDialogOpen(true);
+  }, [removeAllCount, removingAll, reorderingFolder]);
+
+  const handleCloseRemoveAllDialog = useCallback(() => {
+    if (removingAll) {
+      return;
+    }
+    setIsRemoveAllDialogOpen(false);
+  }, [removingAll]);
+
+  const handleConfirmRemoveAll = useCallback(async () => {
+    await onRemoveAll();
+    setIsRemoveAllDialogOpen(false);
+  }, [onRemoveAll]);
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-col gap-1">
+        <h4 className="text-base font-semibold text-zinc-900">Image library</h4>
+      </div>
+      <div className="flex flex-col gap-3 md:flex-row md:items-end">
+        <div className="flex flex-col gap-2 md:flex-row">
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:border-black"
+            disabled={loadingLibrary || reorderingFolder !== null}
+          >
+            {loadingLibrary ? "Refreshing…" : reorderingFolder !== null ? "Saving order…" : "Refresh library"}
+          </button>
+          <button
+            type="button"
+            onClick={handleOpenRemoveAllDialog}
+            disabled={removingAll || reorderingFolder !== null || !library || displayFiles.length === 0}
+            className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
+          >
+            {removingAll ? "Removing…" : "Remove all images"}
+          </button>
+        </div>
+      </div>
+      {libraryNotice && (
+        <p className={`text-sm ${libraryNotice.tone === "success" ? "text-emerald-600" : "text-red-600"}`}>{libraryNotice.text}</p>
+      )}
+      {libraryError && <p className="text-sm text-red-600">{libraryError}</p>}
+      {!library && <p className="text-sm text-zinc-500">Loading library…</p>}
+      {library && displayFiles.length > 0 && (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+            <div className="space-y-1">
+              <p className="font-semibold text-zinc-900">Saved images</p>
+              <p className="text-xs text-zinc-500">Drag the handle and drop anywhere in the folder list to reorder.</p>
+            </div>
+            <span className="text-xs text-zinc-500">
+              {displayFiles.length} image{displayFiles.length === 1 ? "" : "s"}
+            </span>
+          </div>
+          <div className="space-y-4">
+            {librarySections.map((section) => {
+              const activeInsertIndex = dragState?.folderKey === section.folderKey ? dragState.overIndex : null;
+              return (
+                <div key={section.folderKey || "__root__"} className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <div className="space-y-1">
+                      <p className="font-semibold text-zinc-900">{section.label}</p>
+                      <p className="text-xs text-zinc-500">{section.folderKey || library.rootLabel}</p>
+                    </div>
+                    <span className="text-xs text-zinc-500">
+                      {section.files.length} image{section.files.length === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <ul
+                    className="flex flex-col gap-2"
+                    onDragOver={(event) => handleSectionDragOver(event, section.folderKey)}
+                    onDrop={(event) => void handleSectionDrop(event, section.folderKey)}
+                  >
+                    {section.files.map((file, index) => {
+                      const isDragging = dragState?.activePath === file.relativePath;
+                      const topInsertActive = activeInsertIndex === index;
+                      return (
+                        <li
+                          key={file.relativePath}
+                          data-library-item="true"
+                          draggable={reorderingFolder === null}
+                          onDragStart={(event) => handleDragStart(event, file)}
+                          onDragEnd={handleDragEnd}
+                          className={`relative flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/80 p-3 text-sm transition sm:flex-row sm:items-center ${
+                            isDragging ? "cursor-grabbing opacity-50" : "cursor-grab"
+                          } ${reorderingFolder !== null ? "opacity-70" : ""}`}
+                        >
+                          {topInsertActive && (
+                            <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 -top-2">
+                              <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
+                            </div>
+                          )}
+                          <div className="flex items-center gap-3 sm:flex-1">
+                            <div className="flex h-16 w-8 flex-shrink-0 items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 text-zinc-500">
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                className="h-4 w-4"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                              >
+                                <path d="M4 6.5h12" />
+                                <path d="M4 10h12" />
+                                <path d="M4 13.5h12" />
+                              </svg>
+                            </div>
+                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
+                              <img
+                                src={file.previewUrl}
+                                alt={file.name}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                            <div className="flex-1 overflow-hidden">
+                              <p className="truncate font-medium text-zinc-900">{file.name}</p>
+                              <p className="text-xs text-zinc-500">
+                                {formatFileSize(file.size)} · {file.relativePath}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="sm:w-32">
+                            <button
+                              type="button"
+                              onClick={() => void onDeleteFile(file.relativePath)}
+                              disabled={deletingPath === file.relativePath || reorderingFolder !== null}
+                              className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
+                            >
+                              {deletingPath === file.relativePath ? "Removing…" : "Remove"}
+                            </button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                    {activeInsertIndex === section.files.length && (
+                      <li aria-hidden="true" className="list-none px-2">
+                        <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      {library && displayFiles.length === 0 && <p className="text-sm text-zinc-500">No images saved yet.</p>}
+      {isRemoveAllDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 px-4 backdrop-blur-sm"
+          onClick={handleCloseRemoveAllDialog}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="remove-all-images-title"
+            aria-describedby="remove-all-images-description"
+            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
+                <path d="M6.5 6l1 13a2 2 0 0 0 2 1.85h5a2 2 0 0 0 2-1.85l1-13" />
+                <path d="M10 10.5v6" />
+                <path d="M14 10.5v6" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h5 id="remove-all-images-title" className="text-lg font-semibold text-zinc-950">
+                Remove all images?
+              </h5>
+              <p id="remove-all-images-description" className="text-sm text-zinc-600">
+                This will permanently delete all {removeAllCount} image{removeAllCount === 1 ? "" : "s"} from your
+                library. This action cannot be undone.
+              </p>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={handleCloseRemoveAllDialog}
+                disabled={removingAll}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-zinc-500 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleConfirmRemoveAll()}
+                disabled={removingAll}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+              >
+                {removingAll ? "Removing…" : "Delete everything"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -816,4 +1148,84 @@ function formatFileSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function getFolderKeyFromRelativePath(relativePath: string) {
+  const normalized = relativePath.replace(/\\/g, "/").trim();
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length <= 1) {
+    return "";
+  }
+  segments.pop();
+  return segments.join("/");
+}
+
+function buildLibrarySections(files: LibraryFile[]) {
+  const grouped = new Map<string, LibraryFile[]>();
+  for (const file of files) {
+    const folderKey = getFolderKeyFromRelativePath(file.relativePath);
+    const existing = grouped.get(folderKey);
+    if (existing) {
+      existing.push(file);
+    } else {
+      grouped.set(folderKey, [file]);
+    }
+  }
+  return Array.from(grouped.entries()).map(([folderKey, sectionFiles]) => ({
+    folderKey,
+    label: folderKey || "Root folder",
+    files: sectionFiles,
+  }));
+}
+
+function getDropIndexFromList(list: HTMLElement, clientY: number) {
+  const items = Array.from(list.querySelectorAll<HTMLElement>("[data-library-item='true']"));
+  if (items.length === 0) {
+    return 0;
+  }
+  for (let index = 0; index < items.length; index += 1) {
+    const rect = items[index].getBoundingClientRect();
+    const midpoint = rect.top + rect.height / 2;
+    if (clientY < midpoint) {
+      return index;
+    }
+  }
+  return items.length;
+}
+
+function reorderLibraryFiles(files: LibraryFile[], sourcePath: string, folderKey: string, targetIndex: number) {
+  if (folderKey !== getFolderKeyFromRelativePath(sourcePath)) {
+    return null;
+  }
+  const folderFiles = files.filter((file) => getFolderKeyFromRelativePath(file.relativePath) === folderKey);
+  const movingFile = folderFiles.find((file) => file.relativePath === sourcePath);
+  if (!movingFile) {
+    return null;
+  }
+  const sourceIndex = folderFiles.findIndex((file) => file.relativePath === sourcePath);
+  const remainingFiles = folderFiles.filter((file) => file.relativePath !== sourcePath);
+  const boundedTargetIndex = Math.max(0, Math.min(targetIndex, folderFiles.length));
+  const insertIndex = boundedTargetIndex > sourceIndex ? boundedTargetIndex - 1 : boundedTargetIndex;
+  const reorderedFolderFiles = [
+    ...remainingFiles.slice(0, insertIndex),
+    movingFile,
+    ...remainingFiles.slice(insertIndex),
+  ];
+  if (folderFiles.every((file, index) => file.relativePath === reorderedFolderFiles[index]?.relativePath)) {
+    return null;
+  }
+  let reorderedIndex = 0;
+  const nextFiles = files.map((file) => {
+    if (getFolderKeyFromRelativePath(file.relativePath) !== folderKey) {
+      return file;
+    }
+    const nextFile = reorderedFolderFiles[reorderedIndex];
+    reorderedIndex += 1;
+    return nextFile;
+  });
+  return {
+    files: nextFiles,
+    folderKey,
+    folderFiles: reorderedFolderFiles,
+  };
 }
