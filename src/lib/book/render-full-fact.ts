@@ -29,6 +29,7 @@ export interface FullFactOptions {
   imageLibrary?: string;
   overlayOpacity?: number;
   boxTextFontId?: string;
+  boxTextFontBytes?: Uint8Array;
   pageWidth?: number;
   pageHeight?: number;
   totalPages?: number;
@@ -41,6 +42,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
     overlayOpacity = 0.9,
     boxTextFontId,
+    boxTextFontBytes,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
@@ -72,13 +74,15 @@ export async function renderFullFactBook(options: FullFactOptions) {
     return fontCache.get(font)!;
   };
   let customBoxTextFont: PDFFont | null = null;
-  if (boxTextFontId) {
-    const selectedFont = await readBookFont(boxTextFontId);
-    if (!selectedFont) {
+  if (boxTextFontBytes || boxTextFontId) {
+    const selectedBytes =
+      boxTextFontBytes ??
+      (boxTextFontId ? (await readBookFont(boxTextFontId))?.bytes ?? null : null);
+    if (!selectedBytes) {
       throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
     }
     pdf.registerFontkit(fontkit);
-    customBoxTextFont = await pdf.embedFont(selectedFont.bytes, { subset: true });
+    customBoxTextFont = await pdf.embedFont(selectedBytes, { subset: true });
   }
 
   const assets = await loadImageAssets(imageLibrary);

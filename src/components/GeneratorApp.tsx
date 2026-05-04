@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
 import { ImageStudio } from "./ImageStudio";
 
 const MODES = [
@@ -81,11 +82,14 @@ interface BookFontOption {
   familyName: string;
   subfamilyName: string;
   format: BookFontFormat;
+  mimeType: string;
   previewFamily: string;
   previewUrl: string;
   sourceLabel: string;
   sourceType: "file" | "zip";
   entryPath: string | null;
+  storageScope: "server" | "browser";
+  dataBase64?: string;
 }
 
 interface GeneratorAppProps {
@@ -111,11 +115,13 @@ const DEFAULT_FULL_FACT_FONT_OPTION: BookFontOption = {
   familyName: "Default Serif",
   subfamilyName: "Regular",
   format: "truetype",
+  mimeType: "font/ttf",
   previewFamily: '"Times New Roman", Georgia, serif',
   previewUrl: "",
   sourceLabel: "PDF built-in",
   sourceType: "file",
   entryPath: null,
+  storageScope: "server",
 };
 const DEFAULT_FULL_FACT_FONT_SOURCE_KEY = "__default_source__";
 const DEFAULT_FULL_FACT_FONT_SOURCE_LABEL = "Default";
@@ -206,25 +212,40 @@ const STACKED_EVEN_FACTS_PLACEHOLDER = `[
 export function GeneratorApp(props: GeneratorAppProps) {
   const [step, setStep] = useState<WizardStep>(1);
   const [mode, setMode] = useState<ModeValue>("full-fact");
-  const [facts, setFacts] = useState(props.initialFacts ?? "");
+  const [facts, setFacts] = useState(props.initialFacts?.trim() ? props.initialFacts : STACKED_EVEN_FACTS_PLACEHOLDER);
   const [list, setList] = useState(props.initialList ?? "");
   const [listDescription, setListDescription] = useState(props.initialListDescription ?? "");
-  const [imageLibrary, setImageLibrary] = useState(props.defaultImageLibrary ?? "../images");
+  const [downloadTitle, setDownloadTitle] = useState("");
+  const [downloadSubtitle, setDownloadSubtitle] = useState("");
+  const [downloadDescription, setDownloadDescription] = useState("");
+  const [downloadKeywords, setDownloadKeywords] = useState<string[]>(() => Array.from({ length: 7 }, () => ""));
+  const [imageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
   const [pageCount, setPageCount] = useState(40);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
-  const [factsPerPage, setFactsPerPage] = useState(3);
+  const [factsPerPage, setFactsPerPage] = useState(4);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
-  const [availableFonts, setAvailableFonts] = useState<BookFontOption[]>([]);
+  const [serverFonts, setServerFonts] = useState<BookFontOption[]>([]);
+  const [browserFonts, setBrowserFonts] = useState<BookFontOption[]>([]);
   const [loadingFonts, setLoadingFonts] = useState(false);
   const [fontsError, setFontsError] = useState<string | null>(null);
   const [fullFactFontSourceKey, setFullFactFontSourceKey] = useState(DEFAULT_FULL_FACT_FONT_SOURCE_KEY);
   const [fullFactFontSourceSearch, setFullFactFontSourceSearch] = useState(DEFAULT_FULL_FACT_FONT_SOURCE_LABEL);
+  const [isFullFactFontSourceMenuOpen, setIsFullFactFontSourceMenuOpen] = useState(false);
+  const [isFullFactFontSourceFiltering, setIsFullFactFontSourceFiltering] = useState(false);
   const [fullFactBoxFontId, setFullFactBoxFontId] = useState(DEFAULT_FULL_FACT_FONT_ID);
+  const [fullFactFontVariantSearch, setFullFactFontVariantSearch] = useState(
+    formatFontVariantLabel(DEFAULT_FULL_FACT_FONT_OPTION, DEFAULT_FULL_FACT_FONT_SOURCE_LABEL)
+  );
+  const [isFullFactFontVariantMenuOpen, setIsFullFactFontVariantMenuOpen] = useState(false);
+  const [isFullFactFontVariantFiltering, setIsFullFactFontVariantFiltering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const browserFontFileInputRef = useRef<HTMLInputElement | null>(null);
+  const fullFactFontSourceInputRef = useRef<HTMLInputElement | null>(null);
+  const fullFactFontVariantInputRef = useRef<HTMLInputElement | null>(null);
 
   const syncStepFromLocation = useCallback(() => {
     if (typeof window === "undefined") {
@@ -259,24 +280,56 @@ export function GeneratorApp(props: GeneratorAppProps) {
     };
   }, [syncStepFromLocation]);
 
+  const loadBrowserStoredFonts = useCallback(async () => {
+    const fonts = await listBrowserFonts();
+    setBrowserFonts(fonts);
+    return fonts;
+  }, []);
+
   useEffect(() => {
     let ignore = false;
     async function loadBookFonts() {
       try {
         setLoadingFonts(true);
         setFontsError(null);
-        const response = await fetch("/api/book-fonts", { cache: "no-store" });
-        if (!response.ok) {
-          const detail = (await response.json().catch(() => ({}))) as { error?: string };
-          throw new Error(detail.error || "Unable to load fonts");
-        }
-        const payload = (await response.json()) as { fonts?: BookFontOption[] };
+        const [serverResult, browserResult] = await Promise.allSettled([
+          fetch("/api/book-fonts", { cache: "no-store" }),
+          listBrowserFonts(),
+        ]);
+
+        let nextError: string | null = null;
+
         if (!ignore) {
-          setAvailableFonts(payload.fonts ?? []);
+          if (serverResult.status === "fulfilled") {
+            const response = serverResult.value;
+            if (!response.ok) {
+              const detail = (await response.json().catch(() => ({}))) as { error?: string };
+              nextError = detail.error || "Unable to load fonts";
+              setServerFonts([]);
+            } else {
+              const payload = (await response.json()) as { fonts?: Array<Omit<BookFontOption, "storageScope">> };
+              setServerFonts((payload.fonts ?? []).map((font) => ({ ...font, storageScope: "server" })));
+            }
+          } else {
+            nextError = serverResult.reason instanceof Error ? serverResult.reason.message : "Unable to load fonts";
+            setServerFonts([]);
+          }
+
+          if (browserResult.status === "fulfilled") {
+            setBrowserFonts(browserResult.value);
+          } else {
+            nextError = browserResult.reason instanceof Error ? browserResult.reason.message : nextError;
+            setBrowserFonts([]);
+          }
+
+          setFontsError(nextError);
+        } else if (browserResult.status === "fulfilled") {
+          revokeFontPreviewUrls(browserResult.value);
         }
       } catch (err) {
         if (!ignore) {
-          setAvailableFonts([]);
+          setServerFonts([]);
+          setBrowserFonts([]);
           setFontsError(err instanceof Error ? err.message : "Unable to load fonts");
         }
       } finally {
@@ -292,12 +345,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      revokeFontPreviewUrls(browserFonts);
+    };
+  }, [browserFonts]);
+
   const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
   const needsList = ["list"].includes(mode);
   const needsListDescription = ["list-description", "list-description-even"].includes(mode);
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
   const currentOpacity = mode === "full-fact" ? fullFactOpacity : overlayOpacity;
+  const availableFonts = useMemo(() => [...serverFonts, ...browserFonts], [browserFonts, serverFonts]);
   const fullFactFontChoices = useMemo(
     () => [DEFAULT_FULL_FACT_FONT_OPTION, ...availableFonts],
     [availableFonts]
@@ -331,6 +391,32 @@ export function GeneratorApp(props: GeneratorAppProps) {
         .join("\n"),
     [availableFonts]
   );
+  const filteredFullFactFontSourceGroups = useMemo(() => {
+    if (!isFullFactFontSourceFiltering) {
+      return fullFactFontSourceGroups;
+    }
+    const query = fullFactFontSourceSearch.trim().toLowerCase();
+    if (!query) {
+      return fullFactFontSourceGroups;
+    }
+    return fullFactFontSourceGroups.filter((group) => group.searchText.includes(query));
+  }, [fullFactFontSourceGroups, fullFactFontSourceSearch, isFullFactFontSourceFiltering]);
+  const fullFactFontVariants = useMemo(
+    () => selectedFullFactFontSource?.variants ?? [DEFAULT_FULL_FACT_FONT_OPTION],
+    [selectedFullFactFontSource]
+  );
+  const filteredFullFactFontVariants = useMemo(() => {
+    if (!isFullFactFontVariantFiltering) {
+      return fullFactFontVariants;
+    }
+    const query = fullFactFontVariantSearch.trim().toLowerCase();
+    if (!query) {
+      return fullFactFontVariants;
+    }
+    return fullFactFontVariants.filter((variant) =>
+      buildFontVariantSearchText(variant, selectedFullFactFontSource?.label).includes(query)
+    );
+  }, [fullFactFontVariantSearch, fullFactFontVariants, isFullFactFontVariantFiltering, selectedFullFactFontSource]);
 
   useEffect(() => {
     const selectedSource = fullFactFontSourceMap.get(fullFactFontSourceKey);
@@ -355,28 +441,67 @@ export function GeneratorApp(props: GeneratorAppProps) {
     fullFactFontSourceMap,
   ]);
 
+  useEffect(() => {
+    if (isFullFactFontVariantMenuOpen || isFullFactFontVariantFiltering) {
+      return;
+    }
+    setFullFactFontVariantSearch(formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label));
+  }, [
+    isFullFactFontVariantFiltering,
+    isFullFactFontVariantMenuOpen,
+    selectedFullFactFont,
+    selectedFullFactFontSource,
+  ]);
+
+  const selectFullFactFontSource = useCallback(
+    (group: FontSourceGroup) => {
+      const nextVariant =
+        group.variants.find((variant) => variant.id === fullFactBoxFontId) ??
+        group.variants[0] ??
+        DEFAULT_FULL_FACT_FONT_OPTION;
+      setFullFactFontSourceKey(group.key);
+      setFullFactFontSourceSearch(group.label);
+      setFullFactBoxFontId(nextVariant.id);
+      setFullFactFontVariantSearch(formatFontVariantLabel(nextVariant, group.label));
+      setIsFullFactFontSourceMenuOpen(false);
+      setIsFullFactFontSourceFiltering(false);
+      setIsFullFactFontVariantMenuOpen(false);
+      setIsFullFactFontVariantFiltering(false);
+    },
+    [fullFactBoxFontId]
+  );
+
+  const selectFullFactFontVariant = useCallback(
+    (variant: BookFontOption) => {
+      setFullFactBoxFontId(variant.id);
+      setFullFactFontVariantSearch(formatFontVariantLabel(variant, selectedFullFactFontSource?.label));
+      setIsFullFactFontVariantMenuOpen(false);
+      setIsFullFactFontVariantFiltering(false);
+    },
+    [selectedFullFactFontSource]
+  );
+
   const handleFullFactFontSourceChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       const nextValue = event.target.value;
       setFullFactFontSourceSearch(nextValue);
+      setIsFullFactFontSourceMenuOpen(true);
+      setIsFullFactFontSourceFiltering(true);
       const match = findFontSourceGroupByLabel(fullFactFontSourceGroups, nextValue);
       if (!match) {
         return;
       }
-      setFullFactFontSourceKey(match.key);
-      setFullFactBoxFontId(match.variants[0]?.id ?? DEFAULT_FULL_FACT_FONT_ID);
+      selectFullFactFontSource(match);
     },
-    [fullFactFontSourceGroups]
+    [fullFactFontSourceGroups, selectFullFactFontSource]
   );
 
-  const handleFullFactFontSourceBlur = useCallback(() => {
+  const closeFullFactFontSourceMenu = useCallback(() => {
+    setIsFullFactFontSourceMenuOpen(false);
+    setIsFullFactFontSourceFiltering(false);
     const match = findFontSourceGroupByLabel(fullFactFontSourceGroups, fullFactFontSourceSearch);
     if (match) {
-      setFullFactFontSourceKey(match.key);
-      setFullFactFontSourceSearch(match.label);
-      if (!match.variants.some((variant) => variant.id === fullFactBoxFontId)) {
-        setFullFactBoxFontId(match.variants[0]?.id ?? DEFAULT_FULL_FACT_FONT_ID);
-      }
+      selectFullFactFontSource(match);
       return;
     }
 
@@ -385,11 +510,122 @@ export function GeneratorApp(props: GeneratorAppProps) {
       setFullFactFontSourceSearch(fallback.label);
     }
   }, [
-    fullFactBoxFontId,
     fullFactFontSourceGroups,
     fullFactFontSourceSearch,
+    selectFullFactFontSource,
     selectedFullFactFontSource,
   ]);
+
+  const handleFullFactFontSourceBlur = useCallback(() => {
+    window.setTimeout(() => {
+      closeFullFactFontSourceMenu();
+    }, 0);
+  }, [closeFullFactFontSourceMenu]);
+
+  const handleFullFactFontSourceToggle = useCallback(() => {
+    if (isFullFactFontSourceMenuOpen) {
+      closeFullFactFontSourceMenu();
+      return;
+    }
+    setIsFullFactFontSourceMenuOpen(true);
+    setIsFullFactFontSourceFiltering(false);
+    fullFactFontSourceInputRef.current?.focus();
+  }, [closeFullFactFontSourceMenu, isFullFactFontSourceMenuOpen]);
+
+  const handleFullFactFontVariantFocus = useCallback(() => {
+    setIsFullFactFontVariantMenuOpen(true);
+    setIsFullFactFontVariantFiltering(false);
+  }, []);
+
+  const handleFullFactFontVariantChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      setFullFactFontVariantSearch(nextValue);
+      setIsFullFactFontVariantMenuOpen(true);
+      setIsFullFactFontVariantFiltering(true);
+      const match = findFontVariantByLabel(fullFactFontVariants, nextValue, selectedFullFactFontSource?.label);
+      if (match) {
+        selectFullFactFontVariant(match);
+      }
+    },
+    [fullFactFontVariants, selectFullFactFontVariant, selectedFullFactFontSource]
+  );
+
+  const closeFullFactFontVariantMenu = useCallback(() => {
+    setIsFullFactFontVariantMenuOpen(false);
+    setIsFullFactFontVariantFiltering(false);
+    const match = findFontVariantByLabel(
+      fullFactFontVariants,
+      fullFactFontVariantSearch,
+      selectedFullFactFontSource?.label
+    );
+    if (match) {
+      selectFullFactFontVariant(match);
+      return;
+    }
+    setFullFactFontVariantSearch(formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label));
+  }, [
+    fullFactFontVariantSearch,
+    fullFactFontVariants,
+    selectFullFactFontVariant,
+    selectedFullFactFont,
+    selectedFullFactFontSource,
+  ]);
+
+  const handleFullFactFontVariantBlur = useCallback(() => {
+    window.setTimeout(() => {
+      closeFullFactFontVariantMenu();
+    }, 0);
+  }, [closeFullFactFontVariantMenu]);
+
+  const handleFullFactFontVariantToggle = useCallback(() => {
+    if (isFullFactFontVariantMenuOpen) {
+      closeFullFactFontVariantMenu();
+      return;
+    }
+    setIsFullFactFontVariantMenuOpen(true);
+    setIsFullFactFontVariantFiltering(false);
+    fullFactFontVariantInputRef.current?.focus();
+  }, [closeFullFactFontVariantMenu, isFullFactFontVariantMenuOpen]);
+
+  const handleBrowserFontUploadClick = useCallback(() => {
+    browserFontFileInputRef.current?.click();
+  }, []);
+
+  const handleBrowserFontUpload = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (!file) {
+        return;
+      }
+
+      try {
+        setLoadingFonts(true);
+        setFontsError(null);
+        const importedFonts = await importBrowserFontFile(file);
+        const refreshedBrowserFonts = await loadBrowserStoredFonts();
+        const nextAvailableFonts = [...serverFonts, ...refreshedBrowserFonts];
+        const importedFontKey = getFontSourceKey(importedFonts[0]);
+        const importedSourceGroup = buildFontSourceGroups([DEFAULT_FULL_FACT_FONT_OPTION, ...nextAvailableFonts]).find(
+          (group) => group.key === importedFontKey
+        );
+
+        if (importedSourceGroup) {
+          const nextVariant = importedSourceGroup.variants[0] ?? DEFAULT_FULL_FACT_FONT_OPTION;
+          setFullFactFontSourceKey(importedSourceGroup.key);
+          setFullFactFontSourceSearch(importedSourceGroup.label);
+          setFullFactBoxFontId(nextVariant.id);
+          setFullFactFontVariantSearch(formatFontVariantLabel(nextVariant, importedSourceGroup.label));
+        }
+      } catch (err) {
+        setFontsError(err instanceof Error ? err.message : "Unable to import the font pack.");
+      } finally {
+        setLoadingFonts(false);
+      }
+    },
+    [loadBrowserStoredFonts, serverFonts]
+  );
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
@@ -413,7 +649,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }
     if (mode === "full-fact") {
       base.factsPerPage = factsPerPage;
-      if (fullFactBoxFontId !== DEFAULT_FULL_FACT_FONT_ID) {
+      if (selectedFullFactFont.storageScope === "browser" && selectedFullFactFont.dataBase64) {
+        base.fullFactUploadedFont = {
+          bytesBase64: selectedFullFactFont.dataBase64,
+          mimeType: selectedFullFactFont.mimeType,
+          fileName: selectedFullFactFont.fileName,
+        };
+      } else if (fullFactBoxFontId !== DEFAULT_FULL_FACT_FONT_ID) {
         base.fullFactBoxFontId = fullFactBoxFontId;
       }
     }
@@ -434,6 +676,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     listDescription,
     factsPerPage,
     fullFactBoxFontId,
+    selectedFullFactFont,
     targetImageSize,
     pageSize,
     pageCount,
@@ -469,6 +712,33 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }
 
   const selectedMode = useMemo(() => MODES.find((item) => item.value === mode), [mode]);
+  const stepFourTitle = mode === "full-fact" ? "Configure Facts" : `Configure ${selectedMode?.label ?? "the layout"}`;
+  const hasDownloadMetadata = useMemo(
+    () =>
+      Boolean(
+        downloadTitle.trim() ||
+          downloadSubtitle.trim() ||
+          downloadDescription.trim() ||
+          downloadKeywords.some((keyword) => keyword.trim())
+      ),
+    [downloadDescription, downloadKeywords, downloadSubtitle, downloadTitle]
+  );
+
+  const handleDownloadMetadata = useCallback(() => {
+    const content = buildMetadataDownloadText({
+      title: downloadTitle,
+      subtitle: downloadSubtitle,
+      description: downloadDescription,
+      keywords: downloadKeywords,
+    });
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = buildMetadataFileName(downloadTitle);
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+  }, [downloadDescription, downloadKeywords, downloadSubtitle, downloadTitle]);
 
   return (
     <div className="flex flex-col gap-8">
@@ -562,41 +832,166 @@ export function GeneratorApp(props: GeneratorAppProps) {
           {mode === "full-fact" && (
             <div className="space-y-3">
               {customFontPreviewCss ? <style>{customFontPreviewCss}</style> : null}
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-zinc-700">Select Font</label>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-zinc-700">Select Font</label>
+                <button
+                  type="button"
+                  onClick={handleBrowserFontUploadClick}
+                  className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                >
+                  Upload ZIP
+                </button>
+                <input
+                  ref={browserFontFileInputRef}
+                  type="file"
+                  accept=".zip,.ttf,.otf"
+                  onChange={handleBrowserFontUpload}
+                  className="hidden"
+                />
               </div>
               {fontsError && <p className="text-sm text-red-600">{fontsError}</p>}
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-medium text-zinc-700">Font</span>
-                  <input
-                    type="text"
-                    list="full-fact-font-source-options"
-                    value={fullFactFontSourceSearch}
-                    onChange={handleFullFactFontSourceChange}
-                    onBlur={handleFullFactFontSourceBlur}
-                    placeholder="Search font pack..."
-                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                  />
-                  <datalist id="full-fact-font-source-options">
-                    {fullFactFontSourceGroups.map((group) => (
-                      <option key={group.key} value={group.label} />
-                    ))}
-                  </datalist>
+                  <div className="relative">
+                    <input
+                      ref={fullFactFontSourceInputRef}
+                      type="text"
+                      value={fullFactFontSourceSearch}
+                      onChange={handleFullFactFontSourceChange}
+                      onFocus={() => {
+                        setIsFullFactFontSourceMenuOpen(true);
+                        setIsFullFactFontSourceFiltering(false);
+                      }}
+                      onBlur={handleFullFactFontSourceBlur}
+                      placeholder="Search font family..."
+                      role="combobox"
+                      aria-expanded={isFullFactFontSourceMenuOpen}
+                      aria-controls="full-fact-font-source-menu"
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Toggle font family menu"
+                      aria-expanded={isFullFactFontSourceMenuOpen}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={handleFullFactFontSourceToggle}
+                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        className={`h-4 w-4 transition-transform ${isFullFactFontSourceMenuOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m5 7.5 5 5 5-5" />
+                      </svg>
+                    </button>
+                    {isFullFactFontSourceMenuOpen && (
+                      <div
+                        id="full-fact-font-source-menu"
+                        className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                      >
+                        {filteredFullFactFontSourceGroups.length > 0 ? (
+                          filteredFullFactFontSourceGroups.map((group) => {
+                            const isSelected = group.key === selectedFullFactFontSource?.key;
+                            return (
+                              <button
+                                key={group.key}
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectFullFactFontSource(group)}
+                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                  isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                }`}
+                              >
+                                <span className="truncate">{group.label}</span>
+                                <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                  {group.variants.length} {group.variants.length === 1 ? "style" : "styles"}
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <p className="px-3 py-2 text-sm text-zinc-500">No font families match.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </label>
                 <label className="flex flex-col gap-2">
                   <span className="text-sm font-medium text-zinc-700">Variety</span>
-                  <select
-                    value={selectedFullFactFont.id}
-                    onChange={(event) => setFullFactBoxFontId(event.target.value)}
-                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                  >
-                    {(selectedFullFactFontSource?.variants ?? [DEFAULT_FULL_FACT_FONT_OPTION]).map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {formatFontVariantLabel(option)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <input
+                      ref={fullFactFontVariantInputRef}
+                      type="text"
+                      value={fullFactFontVariantSearch}
+                      onChange={handleFullFactFontVariantChange}
+                      onFocus={handleFullFactFontVariantFocus}
+                      onBlur={handleFullFactFontVariantBlur}
+                      placeholder="Search variety..."
+                      role="combobox"
+                      aria-expanded={isFullFactFontVariantMenuOpen}
+                      aria-controls="full-fact-font-variant-menu"
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      aria-label="Toggle font variety menu"
+                      aria-expanded={isFullFactFontVariantMenuOpen}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={handleFullFactFontVariantToggle}
+                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        viewBox="0 0 20 20"
+                        className={`h-4 w-4 transition-transform ${isFullFactFontVariantMenuOpen ? "rotate-180" : ""}`}
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="m5 7.5 5 5 5-5" />
+                      </svg>
+                    </button>
+                    {isFullFactFontVariantMenuOpen && (
+                      <div
+                        id="full-fact-font-variant-menu"
+                        className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                      >
+                        {filteredFullFactFontVariants.length > 0 ? (
+                          filteredFullFactFontVariants.map((option) => {
+                            const label = formatFontVariantLabel(option, selectedFullFactFontSource?.label);
+                            const isSelected = option.id === selectedFullFactFont.id;
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectFullFactFontVariant(option)}
+                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                  isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                }`}
+                              >
+                                <span className="truncate">{label}</span>
+                                <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                  {option.format === "truetype" ? "TTF" : "OTF"}
+                                </span>
+                              </button>
+                            );
+                          })
+                        ) : (
+                          <p className="px-3 py-2 text-sm text-zinc-500">No varieties match.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </label>
               </div>
               <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -604,7 +999,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   <p className="text-sm font-semibold text-zinc-900">
                     {selectedFullFactFontSource?.label ?? DEFAULT_FULL_FACT_FONT_SOURCE_LABEL}
                   </p>
-                  <p className="text-xs text-zinc-500">{formatFontVariantLabel(selectedFullFactFont)}</p>
+                  <p className="text-xs text-zinc-500">
+                    {formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label)}
+                  </p>
                 </div>
                 <p className="mt-3 text-2xl leading-snug text-zinc-800" style={{ fontFamily: selectedFullFactFont.previewFamily }}>
                   {FULL_FACT_FONT_PREVIEW_TEXT}
@@ -613,8 +1010,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
               {loadingFonts || availableFonts.length === 0 ? (
                 <p className="text-xs text-zinc-500">
                   {loadingFonts
-                    ? "Loading fonts from ./fonts..."
-                    : "Add .ttf, .otf, or zipped font families to ./fonts to unlock custom font choices."}
+                    ? "Loading font library..."
+                    : "Use Upload ZIP or add .ttf, .otf, or zipped font families to ./fonts to unlock custom font choices."}
                 </p>
               ) : null}
             </div>
@@ -664,25 +1061,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 4</p>
-            <h3 className="text-lg font-semibold text-zinc-900">
-              Configure {selectedMode?.label ?? "the layout"}
-            </h3>
-            <p className="text-sm text-zinc-700">
-              Point to your assets, drop in JSON/text, and fine-tune overlay settings before generating the PDF.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700">Image Folder</label>
-            <input
-              type="text"
-              value={imageLibrary}
-              onChange={(event) => setImageLibrary(event.target.value)}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-          />
-          <p className="text-xs text-zinc-700">
-            Paths are resolved relative to the Next.js project. Point this to your curated ./images folder.
-          </p>
+            <h3 className="text-lg font-semibold text-zinc-900">{stepFourTitle}</h3>
           </div>
 
         {needsOverlayOpacity && (
@@ -717,7 +1096,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               onChange={(event) => setFacts(event.target.value)}
               className="h-40 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={mode === "full-fact"
-                ? STACKED_EVEN_FACTS_PLACEHOLDER
+                ? "Paste facts here as JSON or one fact per line"
                 : `[
   {"title": "Voyager 1 keeps flying", "fact": "Launched in 1977, it's now beyond 150 AU from Earth."},
   {"title": "Lightning is scorching", "fact": "Lightning channels can heat the air to 50,000°F."}
@@ -752,7 +1131,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
         {mode === "full-fact" && (
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700">Facts Per Even Page</label>
+            <label className="text-sm font-medium text-zinc-700">Facts Per Page</label>
             <input
               type="number"
               min={1}
@@ -795,6 +1174,66 @@ export function GeneratorApp(props: GeneratorAppProps) {
             >
               {isLoading ? "Generating…" : "Generate PDF"}
             </button>
+          </div>
+
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-5">
+            <div className="space-y-1">
+              <h4 className="text-base font-semibold text-zinc-900">Metadata</h4>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-zinc-700">Title</span>
+                <input
+                  type="text"
+                  value={downloadTitle}
+                  onChange={(event) => setDownloadTitle(event.target.value)}
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-zinc-700">Subtitle</span>
+                <input
+                  type="text"
+                  value={downloadSubtitle}
+                  onChange={(event) => setDownloadSubtitle(event.target.value)}
+                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                />
+              </label>
+              <label className="flex flex-col gap-2 md:col-span-2">
+                <span className="text-sm font-medium text-zinc-700">Description</span>
+                <textarea
+                  value={downloadDescription}
+                  onChange={(event) => setDownloadDescription(event.target.value)}
+                  className="min-h-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                />
+              </label>
+              {downloadKeywords.map((keyword, index) => (
+                <label key={`download-keyword-${index}`} className="flex flex-col gap-2">
+                  <span className="text-sm font-medium text-zinc-700">Keyword {index + 1}</span>
+                  <input
+                    type="text"
+                    value={keyword}
+                    onChange={(event) =>
+                      setDownloadKeywords((current) =>
+                        current.map((value, keywordIndex) => (keywordIndex === index ? event.target.value : value))
+                      )
+                    }
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                  />
+                </label>
+              ))}
+            </div>
+            {hasDownloadMetadata && (
+              <div className="mt-4 flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleDownloadMetadata}
+                  className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+                >
+                  Download TXT
+                </button>
+              </div>
+            )}
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -845,27 +1284,30 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
 }
 
 function buildFontSourceGroups(options: BookFontOption[]) {
-  const groups = new Map<string, FontSourceGroup>();
+  const groups = new Map<string, { key: string; variants: BookFontOption[] }>();
   for (const option of options) {
     const key = getFontSourceKey(option);
     const existing = groups.get(key);
     if (existing) {
       existing.variants.push(option);
-      existing.searchText = `${existing.searchText} ${option.fullName} ${option.subfamilyName}`.trim();
       continue;
     }
     groups.set(key, {
       key,
-      label: getFontSourceLabel(option),
-      searchText: `${getFontSourceLabel(option)} ${option.sourceLabel} ${option.fullName} ${option.familyName} ${option.subfamilyName}`.toLowerCase(),
       variants: [option],
     });
   }
 
   const sortedGroups = Array.from(groups.values()).map((group) => ({
-    ...group,
+    key: group.key,
+    label: getFontSourceLabel(group.variants),
+    searchText: buildFontSourceSearchText(group.variants, getFontSourceLabel(group.variants)),
     variants: [...group.variants].sort((left, right) =>
-      formatFontVariantLabel(left).localeCompare(formatFontVariantLabel(right), undefined, { sensitivity: "base" })
+      formatFontVariantLabel(left, getFontSourceLabel(group.variants)).localeCompare(
+        formatFontVariantLabel(right, getFontSourceLabel(group.variants)),
+        undefined,
+        { sensitivity: "base" }
+      )
     ),
   }));
 
@@ -882,35 +1324,51 @@ function buildFontSourceGroups(options: BookFontOption[]) {
   return sortedGroups;
 }
 
-function getFontSourceKey(option: BookFontOption) {
+function getFontSourceKey(
+  option: Pick<BookFontOption, "id" | "sourceType" | "sourceLabel"> & { storageScope?: BookFontOption["storageScope"] }
+) {
   if (option.id === DEFAULT_FULL_FACT_FONT_ID) {
     return DEFAULT_FULL_FACT_FONT_SOURCE_KEY;
   }
-  return option.sourceType === "zip" ? `zip:${option.sourceLabel}` : `file:${option.sourceLabel}`;
+  const scope = option.storageScope === "browser" || option.id.startsWith("browser:") ? "browser" : "server";
+  return `${scope}:${option.sourceType}:${option.sourceLabel}`;
 }
 
-function getFontSourceLabel(option: BookFontOption) {
-  if (option.id === DEFAULT_FULL_FACT_FONT_ID) {
+function getFontSourceLabel(options: BookFontOption[]) {
+  const [firstOption] = options;
+  if (!firstOption) {
+    return "";
+  }
+  if (firstOption.id === DEFAULT_FULL_FACT_FONT_ID) {
     return DEFAULT_FULL_FACT_FONT_SOURCE_LABEL;
   }
-  if (option.sourceType === "zip") {
-    return stripExtension(option.sourceLabel);
+  const sharedFamilyName = options.length > 1 ? getSharedFontFamilyName(options) : null;
+  if (sharedFamilyName) {
+    return sharedFamilyName;
   }
-  return option.familyName || stripExtension(option.fileName);
+  if (firstOption.sourceType === "zip") {
+    return stripExtension(firstOption.sourceLabel);
+  }
+  return firstOption.familyName || stripExtension(firstOption.fileName);
 }
 
-function formatFontVariantLabel(option: BookFontOption) {
+function formatFontVariantLabel(option: BookFontOption, sourceLabel?: string) {
   if (option.id === DEFAULT_FULL_FACT_FONT_ID) {
     return option.subfamilyName || "Regular";
   }
-  const variant = option.subfamilyName || "Regular";
-  if (option.sourceType === "zip" && option.fullName && option.fullName !== option.label) {
-    return `${option.fullName} - ${variant}`;
+  const normalizedSubfamily = normalizeFontText(option.subfamilyName);
+  if (normalizedSubfamily && normalizedSubfamily.toLowerCase() !== "regular") {
+    return normalizedSubfamily;
   }
-  if (option.fullName && option.fullName !== option.familyName) {
-    return option.fullName;
+  const normalizedSourceLabel = normalizeFontText(sourceLabel ?? "");
+  const derivedVariant =
+    deriveFontVariantFromName(option.fullName, normalizedSourceLabel) ||
+    deriveFontVariantFromName(option.familyName, normalizedSourceLabel) ||
+    deriveFontVariantFromName(stripExtension(option.fileName), normalizedSourceLabel);
+  if (derivedVariant) {
+    return derivedVariant;
   }
-  return variant;
+  return normalizedSubfamily || "Regular";
 }
 
 function findFontSourceGroupByLabel(groups: FontSourceGroup[], value: string) {
@@ -921,6 +1379,138 @@ function findFontSourceGroupByLabel(groups: FontSourceGroup[], value: string) {
   return groups.find((group) => group.label.toLowerCase() === normalized) ?? null;
 }
 
+function findFontVariantByLabel(options: BookFontOption[], value: string, sourceLabel?: string) {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+  return (
+    options.find((option) => formatFontVariantLabel(option, sourceLabel).toLowerCase() === normalized) ?? null
+  );
+}
+
+function buildFontSourceSearchText(options: BookFontOption[], label: string) {
+  return [
+    label,
+    ...options.flatMap((option) => [
+      option.sourceLabel,
+      option.fullName,
+      option.familyName,
+      option.subfamilyName,
+      formatFontVariantLabel(option, label),
+    ]),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function buildFontVariantSearchText(option: BookFontOption, sourceLabel?: string) {
+  return [
+    formatFontVariantLabel(option, sourceLabel),
+    option.fullName,
+    option.familyName,
+    option.subfamilyName,
+    option.fileName,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getSharedFontFamilyName(options: BookFontOption[]) {
+  const familyWords = options
+    .map((option) => normalizeFontText(option.familyName || option.fullName))
+    .filter(Boolean)
+    .map((name) => name.split(" "));
+  if (familyWords.length < 2) {
+    return null;
+  }
+  let prefix = familyWords[0];
+  for (const words of familyWords.slice(1)) {
+    let index = 0;
+    while (
+      index < prefix.length &&
+      index < words.length &&
+      prefix[index].localeCompare(words[index], undefined, { sensitivity: "base" }) === 0
+    ) {
+      index += 1;
+    }
+    prefix = prefix.slice(0, index);
+    if (prefix.length === 0) {
+      return null;
+    }
+  }
+  return prefix.join(" ").trim() || null;
+}
+
+function deriveFontVariantFromName(value: string, sourceLabel: string) {
+  const normalizedValue = normalizeFontText(value);
+  if (!normalizedValue || !sourceLabel) {
+    return "";
+  }
+  const sourcePattern = sourceLabel
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeRegExp)
+    .join("\\s+");
+  const withoutPrefix = normalizedValue.replace(new RegExp(`^${sourcePattern}(?:\\s+|[-_]+)?`, "i"), "").trim();
+  if (!withoutPrefix || withoutPrefix.localeCompare(normalizedValue, undefined, { sensitivity: "base" }) === 0) {
+    return "";
+  }
+  return withoutPrefix;
+}
+
+function normalizeFontText(value: string | null | undefined) {
+  return value?.replace(/\s+/g, " ").trim() ?? "";
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function stripExtension(value: string) {
   return value.replace(/\.[^.]+$/, "");
+}
+
+function buildMetadataDownloadText({
+  title,
+  subtitle,
+  description,
+  keywords,
+}: {
+  title: string;
+  subtitle: string;
+  description: string;
+  keywords: string[];
+}) {
+  const normalizedKeywords = keywords.map((keyword) => keyword.trim()).filter(Boolean);
+  return [
+    "Title:",
+    title.trim(),
+    "",
+    "Subtitle:",
+    subtitle.trim(),
+    "",
+    "Description:",
+    description.trim(),
+    "",
+    "Keywords:",
+    normalizedKeywords.join("\n"),
+  ].join("\n");
+}
+
+function buildMetadataFileName(title: string) {
+  const normalized = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+  return `${normalized || "book-details"}.txt`;
+}
+
+function revokeFontPreviewUrls(fonts: BookFontOption[]) {
+  for (const font of fonts) {
+    if (font.storageScope === "browser" && font.previewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(font.previewUrl);
+    }
+  }
 }

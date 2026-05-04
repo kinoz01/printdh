@@ -123,9 +123,11 @@ interface ImageLibraryPanelProps {
   libraryNotice: { text: string; tone: "success" | "error" } | null;
   loadingLibrary: boolean;
   uploadingLocal: boolean;
+  downloadingRootZip: boolean;
   removingAll: boolean;
   deletingPath: string | null;
   onRefresh: () => Promise<void>;
+  onDownloadRootZip: () => Promise<void>;
   onRemoveAll: () => Promise<void>;
   onDeleteFile: (relativePath: string) => Promise<void>;
   onReorder: (folderKey: string, nextFiles: LibraryFile[]) => Promise<void>;
@@ -143,7 +145,7 @@ const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const STORAGE_KEY = "image-provider-keys";
 const MAX_RESULTS = 36;
 
-export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
+export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
   const [apiKeys, setApiKeys] = useState<ApiKeys>(DEFAULT_KEYS);
   const [selectedProviders, setSelectedProviders] = useState<Set<ProviderValue>>(new Set(["scraping-win"]));
   const [keywordInput, setKeywordInput] = useState("");
@@ -160,6 +162,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
   const [libraryNotice, setLibraryNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [uploadingLocal, setUploadingLocal] = useState(false);
+  const [downloadingRootZip, setDownloadingRootZip] = useState(false);
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
@@ -413,6 +416,34 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
       setRemovingAll(false);
     }
   }, [refreshLibrary]);
+
+  const handleDownloadRootZip = useCallback(async () => {
+    setDownloadingRootZip(true);
+    setLibraryNotice(null);
+    try {
+      const response = await fetch("/api/images?download=zip", { cache: "no-store" });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || "Failed to download ZIP");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = getDownloadFileName(response.headers.get("content-disposition")) || "root-folder-images.zip";
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      setLibraryNotice({ text: `Downloaded ${anchor.download}`, tone: "success" });
+    } catch (error) {
+      setLibraryNotice({
+        text: error instanceof Error ? error.message : "Failed to download ZIP",
+        tone: "error",
+      });
+    } finally {
+      setDownloadingRootZip(false);
+    }
+  }, []);
 
   const providerBuckets = useMemo(() => {
     const map = new Map<ProviderValue, { provider: ProviderValue; keywords: Array<{ keyword: string; results: ImageResult[]; error: string | null }> }>();
@@ -841,9 +872,11 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         libraryNotice={libraryNotice}
         loadingLibrary={loadingLibrary}
         uploadingLocal={uploadingLocal}
+        downloadingRootZip={downloadingRootZip}
         removingAll={removingAll}
         deletingPath={deletingPath}
         onRefresh={refreshLibrary}
+        onDownloadRootZip={handleDownloadRootZip}
         onRemoveAll={handleRemoveAll}
         onDeleteFile={handleDeleteFile}
         onReorder={handleReorderLibrary}
@@ -859,9 +892,11 @@ function ImageLibraryPanel({
   libraryNotice,
   loadingLibrary,
   uploadingLocal,
+  downloadingRootZip,
   removingAll,
   deletingPath,
   onRefresh,
+  onDownloadRootZip,
   onRemoveAll,
   onDeleteFile,
   onReorder,
@@ -1100,7 +1135,14 @@ function ImageLibraryPanel({
           <button
             type="button"
             onClick={handleOpenRemoveAllDialog}
-            disabled={removingAll || uploadingLocal || reorderingFolder !== null || !library || displayFiles.length === 0}
+            disabled={
+              removingAll ||
+              uploadingLocal ||
+              downloadingRootZip ||
+              reorderingFolder !== null ||
+              !library ||
+              displayFiles.length === 0
+            }
             className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
           >
             {removingAll ? "Removing…" : "Remove all images"}
@@ -1244,7 +1286,26 @@ function ImageLibraryPanel({
                 </ul>
               );
               if (!section.folderKey) {
-                return sectionList;
+                return (
+                  <div key="__root__" className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void onDownloadRootZip()}
+                          disabled={uploadingLocal || downloadingRootZip || reorderingFolder !== null || section.files.length === 0}
+                          className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+                        >
+                          {downloadingRootZip ? "Preparing ZIP…" : "Download ZIP"}
+                        </button>
+                        <span className="text-xs text-zinc-500">
+                          {section.files.length} image{section.files.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </div>
+                    {sectionList}
+                  </div>
+                );
               }
               return (
                 <div key={section.folderKey} className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
@@ -1365,6 +1426,18 @@ function formatFileSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function getDownloadFileName(contentDisposition: string | null) {
+  if (!contentDisposition) {
+    return "";
+  }
+  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const basicMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  return basicMatch?.[1] ?? "";
 }
 
 function isSupportedLocalImageFile(file: File) {

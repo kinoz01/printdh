@@ -1,6 +1,7 @@
 import { promises as fs, Dirent } from "fs";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { zipSync } from "fflate";
 import { z } from "zod";
 
 const IMAGES_ROOT = path.resolve(process.cwd(), "..", "images");
@@ -20,9 +21,14 @@ const reorderSchema = z.object({
   order: z.array(z.string()).min(1),
 });
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await fs.mkdir(IMAGES_ROOT, { recursive: true });
+    const { searchParams } = new URL(request.url);
+    if (searchParams.get("download") === "zip") {
+      const folderKey = normalizeFolderKey(searchParams.get("folder") ?? "");
+      return await downloadLibraryZip(folderKey);
+    }
     const { folders, files, sourcesByUrl } = await readLibrary();
     const filesWithPreview = files.map((file) => ({
       ...file,
@@ -38,6 +44,35 @@ export async function GET() {
     const message = error instanceof Error ? error.message : "Unable to list images";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function downloadLibraryZip(folderKey: string) {
+  const files = await collectOrderedFilesForFolder(folderKey);
+  if (files.length === 0) {
+    return NextResponse.json(
+      { error: folderKey ? `No images found in ${folderKey}` : "No root folder images found" },
+      { status: 404 }
+    );
+  }
+
+  const zipEntries: Record<string, Uint8Array> = {};
+  for (const file of files) {
+    const filePath = resolveLibraryPath(file.relativePath);
+    zipEntries[file.name] = new Uint8Array(await fs.readFile(filePath));
+  }
+
+  const zipBytes = zipSync(zipEntries, { level: 0 });
+  const zipBuffer = new ArrayBuffer(zipBytes.byteLength);
+  new Uint8Array(zipBuffer).set(zipBytes);
+  const filename = buildLibraryZipFileName(folderKey);
+  return new NextResponse(zipBuffer, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Cache-Control": "no-store",
+    },
+  });
 }
 
 export async function POST(request: NextRequest) {
@@ -210,6 +245,14 @@ async function readLibrary() {
   return { folders, files, sourcesByUrl };
 }
 
+async function collectOrderedFilesForFolder(folderKey: string) {
+  const rawFiles = await collectImageFiles(IMAGES_ROOT);
+  const orderings = await collectFolderOrders(IMAGES_ROOT);
+  return rawFiles
+    .filter((file) => getFolderKey(file.relativePath) === folderKey)
+    .sort((a, b) => compareWithOrdering(a, b, orderings));
+}
+
 async function collectImageFiles(directory: string): Promise<RawCollectedFile[]> {
   const entries = await fs.readdir(directory, { withFileTypes: true });
   const collected: RawCollectedFile[] = [];
@@ -328,6 +371,13 @@ function toRelativePath(filePath: string) {
 
 function buildPreviewUrl(relativePath: string) {
   return `/api/image-preview?path=${encodeURIComponent(relativePath)}`;
+}
+
+function buildLibraryZipFileName(folderKey: string) {
+  if (!folderKey) {
+    return "root-folder-images.zip";
+  }
+  return `${folderKey.replace(/[\\/]+/g, "-")}-images.zip`;
 }
 
 async function collectFolderOrders(directory: string, relative = ""): Promise<Record<string, string[]>> {

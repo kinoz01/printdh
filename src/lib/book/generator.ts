@@ -23,6 +23,7 @@ export interface GenerateBookPayload {
   overlayOpacity?: number;
   factsPerPage?: number;
   fullFactBoxFontId?: string;
+  fullFactUploadedFontBytes?: Uint8Array;
   targetImageSize?: number;
   pageSize?: PageSizePreset;
   pageCount?: number;
@@ -131,13 +132,14 @@ export async function generateBook(payload: GenerateBookPayload) {
     }
     case "full-fact": {
       const entries = parseLooseFactsInput(payload.facts ?? "");
-      const factsPerPage = Math.max(1, Math.min(6, payload.factsPerPage ?? 3));
+      const factsPerPage = Math.max(1, Math.min(6, payload.factsPerPage ?? 4));
       return renderFullFactBook({
         entries,
         factsPerPage,
         imageLibrary,
         overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.9),
         boxTextFontId: payload.fullFactBoxFontId,
+        boxTextFontBytes: payload.fullFactUploadedFontBytes,
         ...sharedPageOptions,
       });
     }
