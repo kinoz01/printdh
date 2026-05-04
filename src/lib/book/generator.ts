@@ -22,6 +22,7 @@ export interface GenerateBookPayload {
   imageLibrary?: string;
   overlayOpacity?: number;
   factsPerPage?: number;
+  fullFactBoxFontId?: string;
   targetImageSize?: number;
   pageSize?: PageSizePreset;
   pageCount?: number;
@@ -136,6 +137,7 @@ export async function generateBook(payload: GenerateBookPayload) {
         factsPerPage,
         imageLibrary,
         overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.9),
+        boxTextFontId: payload.fullFactBoxFontId,
         ...sharedPageOptions,
       });
     }

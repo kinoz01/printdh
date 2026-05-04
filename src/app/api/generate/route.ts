@@ -19,6 +19,7 @@ const schema = z.object({
   imageLibrary: z.string().optional(),
   overlayOpacity: z.number().optional(),
   factsPerPage: z.number().int().positive().optional(),
+  fullFactBoxFontId: z.string().min(1).optional(),
   targetImageSize: z.number().positive().optional(),
   pageSize: z.enum(["square", "us-letter"]).optional(),
   pageCount: z.number().int().min(4).max(200).optional(),

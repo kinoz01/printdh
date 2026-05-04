@@ -2,7 +2,16 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useCallback, useEffect, useMemo, useState, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent as ReactDragEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 
 const PROVIDERS = [
   {
@@ -113,18 +122,21 @@ interface ImageLibraryPanelProps {
   libraryError: string | null;
   libraryNotice: { text: string; tone: "success" | "error" } | null;
   loadingLibrary: boolean;
+  uploadingLocal: boolean;
   removingAll: boolean;
   deletingPath: string | null;
   onRefresh: () => Promise<void>;
   onRemoveAll: () => Promise<void>;
   onDeleteFile: (relativePath: string) => Promise<void>;
   onReorder: (folderKey: string, nextFiles: LibraryFile[]) => Promise<void>;
+  onUploadFiles: (files: File[]) => Promise<void>;
 }
 
 interface DragState {
   activePath: string;
   folderKey: string;
   overIndex: number | null;
+  pointerId: number;
 }
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
@@ -147,6 +159,7 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
   const [libraryError, setLibraryError] = useState<string | null>(null);
   const [libraryNotice, setLibraryNotice] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [loadingLibrary, setLoadingLibrary] = useState(false);
+  const [uploadingLocal, setUploadingLocal] = useState(false);
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
@@ -463,6 +476,63 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
     [library]
   );
 
+  const handleUploadFiles = useCallback(
+    async (files: File[]) => {
+      const supportedFiles = files.filter(isSupportedLocalImageFile);
+      const ignoredCount = files.length - supportedFiles.length;
+      if (supportedFiles.length === 0) {
+        setLibraryNotice({
+          text: ignoredCount > 0 ? "Only JPG, PNG, WEBP, and GIF images can be added." : "Choose at least one image to upload.",
+          tone: "error",
+        });
+        return;
+      }
+
+      setUploadingLocal(true);
+      setLibraryNotice(null);
+
+      let addedCount = 0;
+      let failedCount = 0;
+
+      try {
+        for (const file of supportedFiles) {
+          const formData = new FormData();
+          formData.append("file", file);
+          const response = await fetch("/api/images", {
+            method: "POST",
+            body: formData,
+          });
+          if (!response.ok) {
+            failedCount += 1;
+            continue;
+          }
+          addedCount += 1;
+        }
+
+        if (addedCount > 0) {
+          await refreshLibrary();
+        }
+
+        setLibraryNotice({
+          text: buildUploadNotice({
+            addedCount,
+            failedCount,
+            ignoredCount,
+          }),
+          tone: failedCount > 0 ? "error" : "success",
+        });
+      } catch (error) {
+        setLibraryNotice({
+          text: error instanceof Error ? error.message : "Failed to add images",
+          tone: "error",
+        });
+      } finally {
+        setUploadingLocal(false);
+      }
+    },
+    [refreshLibrary]
+  );
+
   const renderResultCard = (result: ImageResult, uniqueKey?: string) => {
     const sourceUrl = result.fullsizeUrl || result.previewUrl;
     const savedPath = sourceUrl && library?.sourcesByUrl ? library.sourcesByUrl[sourceUrl] : undefined;
@@ -770,12 +840,14 @@ export function ImageStudio({ defaultLimit = 18 }: ImageStudioProps) {
         libraryError={libraryError}
         libraryNotice={libraryNotice}
         loadingLibrary={loadingLibrary}
+        uploadingLocal={uploadingLocal}
         removingAll={removingAll}
         deletingPath={deletingPath}
         onRefresh={refreshLibrary}
         onRemoveAll={handleRemoveAll}
         onDeleteFile={handleDeleteFile}
         onReorder={handleReorderLibrary}
+        onUploadFiles={handleUploadFiles}
       />
     </div>
   );
@@ -786,17 +858,22 @@ function ImageLibraryPanel({
   libraryError,
   libraryNotice,
   loadingLibrary,
+  uploadingLocal,
   removingAll,
   deletingPath,
   onRefresh,
   onRemoveAll,
   onDeleteFile,
   onReorder,
+  onUploadFiles,
 }: ImageLibraryPanelProps) {
   const [displayFiles, setDisplayFiles] = useState<LibraryFile[]>(library?.files ?? []);
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [reorderingFolder, setReorderingFolder] = useState<string | null>(null);
   const [isRemoveAllDialogOpen, setIsRemoveAllDialogOpen] = useState(false);
+  const [isUploadTargetActive, setIsUploadTargetActive] = useState(false);
+  const sectionRefs = useRef<Map<string, HTMLUListElement>>(new Map());
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setDisplayFiles(library?.files ?? []);
@@ -817,40 +894,67 @@ function ImageLibraryPanel({
     };
   }, [isRemoveAllDialogOpen, removingAll]);
 
+  useEffect(() => {
+    if (!dragState) {
+      return;
+    }
+    const previousUserSelect = document.body.style.userSelect;
+    const previousCursor = document.body.style.cursor;
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+    return () => {
+      document.body.style.userSelect = previousUserSelect;
+      document.body.style.cursor = previousCursor;
+    };
+  }, [dragState]);
+
   const librarySections = useMemo<LibrarySection[]>(() => buildLibrarySections(displayFiles), [displayFiles]);
   const removeAllCount = displayFiles.length;
 
-  const handleDragStart = useCallback(
-    (event: DragEvent<HTMLLIElement>, file: LibraryFile) => {
+  const handleSectionRef = useCallback((folderKey: string, node: HTMLUListElement | null) => {
+    if (node) {
+      sectionRefs.current.set(folderKey, node);
+      return;
+    }
+    sectionRefs.current.delete(folderKey);
+  }, []);
+
+  const handleDragPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>, file: LibraryFile) => {
       if (reorderingFolder !== null) {
-        event.preventDefault();
+        return;
+      }
+      if (event.pointerType === "mouse" && event.button !== 0) {
         return;
       }
       const folderKey = getFolderKeyFromRelativePath(file.relativePath);
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("text/plain", file.relativePath);
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
       setDragState({
         activePath: file.relativePath,
         folderKey,
         overIndex: null,
+        pointerId: event.pointerId,
       });
     },
     [reorderingFolder]
   );
 
-  const handleSectionDragOver = useCallback(
-    (event: DragEvent<HTMLUListElement>, folderKey: string) => {
-      if (!dragState || dragState.folderKey !== folderKey) {
+  const handleDragPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!dragState || dragState.pointerId !== event.pointerId) {
         return;
       }
-      event.preventDefault();
-      event.dataTransfer.dropEffect = "move";
-      const overIndex = getDropIndexFromList(event.currentTarget, event.clientY);
+      const section = sectionRefs.current.get(dragState.folderKey);
+      if (!section) {
+        return;
+      }
+      const overIndex = getDropIndexFromList(section, event.clientY);
       if (dragState.overIndex === overIndex) {
         return;
       }
       setDragState((current) => {
-        if (!current || current.folderKey !== folderKey) {
+        if (!current || current.pointerId !== event.pointerId) {
           return current;
         }
         return {
@@ -862,24 +966,29 @@ function ImageLibraryPanel({
     [dragState]
   );
 
-  const handleSectionDrop = useCallback(
-    async (event: DragEvent<HTMLUListElement>, folderKey: string) => {
-      event.preventDefault();
-      if (!dragState || dragState.folderKey !== folderKey || !library) {
+  const handleDragPointerUp = useCallback(
+    async (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (!dragState || dragState.pointerId !== event.pointerId || !library) {
         setDragState(null);
         return;
       }
-      const targetIndex = getDropIndexFromList(event.currentTarget, event.clientY);
-      const reorder = reorderLibraryFiles(displayFiles, dragState.activePath, folderKey, targetIndex);
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      const section = sectionRefs.current.get(dragState.folderKey);
+      const targetIndex = section
+        ? getDropIndexFromList(section, event.clientY)
+        : dragState.overIndex ?? 0;
+      const reorder = reorderLibraryFiles(displayFiles, dragState.activePath, dragState.folderKey, targetIndex);
       const previousFiles = displayFiles;
       setDragState(null);
       if (!reorder) {
         return;
       }
       setDisplayFiles(reorder.files);
-      setReorderingFolder(folderKey);
+      setReorderingFolder(dragState.folderKey);
       try {
-        await onReorder(folderKey, reorder.files);
+        await onReorder(dragState.folderKey, reorder.files);
       } catch {
         setDisplayFiles(previousFiles);
       } finally {
@@ -889,9 +998,15 @@ function ImageLibraryPanel({
     [displayFiles, dragState, library, onReorder]
   );
 
-  const handleDragEnd = useCallback(() => {
+  const handleDragPointerCancel = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     setDragState(null);
-  }, []);
+  }, [dragState]);
 
   const handleOpenRemoveAllDialog = useCallback(() => {
     if (reorderingFolder !== null || removingAll || removeAllCount === 0) {
@@ -912,6 +1027,61 @@ function ImageLibraryPanel({
     setIsRemoveAllDialogOpen(false);
   }, [onRemoveAll]);
 
+  const handleOpenFilePicker = useCallback(() => {
+    if (uploadingLocal || reorderingFolder !== null) {
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [reorderingFolder, uploadingLocal]);
+
+  const handleFileInputChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      if (files.length === 0) {
+        return;
+      }
+      await onUploadFiles(files);
+    },
+    [onUploadFiles]
+  );
+
+  const handleUploadDragOver = useCallback(
+    (event: ReactDragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      if (uploadingLocal || reorderingFolder !== null) {
+        return;
+      }
+      setIsUploadTargetActive(true);
+    },
+    [reorderingFolder, uploadingLocal]
+  );
+
+  const handleUploadDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setIsUploadTargetActive(false);
+  }, []);
+
+  const handleUploadDrop = useCallback(
+    async (event: ReactDragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      if (uploadingLocal || reorderingFolder !== null) {
+        setIsUploadTargetActive(false);
+        return;
+      }
+      setIsUploadTargetActive(false);
+      const files = Array.from(event.dataTransfer.files ?? []);
+      if (files.length === 0) {
+        return;
+      }
+      await onUploadFiles(files);
+    },
+    [onUploadFiles, reorderingFolder, uploadingLocal]
+  );
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-1">
@@ -923,14 +1093,14 @@ function ImageLibraryPanel({
             type="button"
             onClick={() => void onRefresh()}
             className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 hover:border-black"
-            disabled={loadingLibrary || reorderingFolder !== null}
+            disabled={loadingLibrary || uploadingLocal || reorderingFolder !== null}
           >
-            {loadingLibrary ? "Refreshing…" : reorderingFolder !== null ? "Saving order…" : "Refresh library"}
+            {loadingLibrary ? "Refreshing…" : uploadingLocal ? "Uploading…" : reorderingFolder !== null ? "Saving order…" : "Refresh library"}
           </button>
           <button
             type="button"
             onClick={handleOpenRemoveAllDialog}
-            disabled={removingAll || reorderingFolder !== null || !library || displayFiles.length === 0}
+            disabled={removingAll || uploadingLocal || reorderingFolder !== null || !library || displayFiles.length === 0}
             className="rounded-md border border-red-200 px-4 py-2 text-sm font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
           >
             {removingAll ? "Removing…" : "Remove all images"}
@@ -942,112 +1112,159 @@ function ImageLibraryPanel({
       )}
       {libraryError && <p className="text-sm text-red-600">{libraryError}</p>}
       {!library && <p className="text-sm text-zinc-500">Loading library…</p>}
-      {library && displayFiles.length > 0 && (
+      {library && (
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
             <div className="space-y-1">
               <p className="font-semibold text-zinc-900">Saved images</p>
-              <p className="text-xs text-zinc-500">Drag the handle and drop anywhere in the folder list to reorder.</p>
+              <p className="text-xs text-zinc-500">Drag and drop to reorder images.</p>
             </div>
             <span className="text-xs text-zinc-500">
               {displayFiles.length} image{displayFiles.length === 1 ? "" : "s"}
             </span>
           </div>
-          <div className="space-y-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.webp,.gif,image/jpeg,image/png,image/webp,image/gif"
+            multiple
+            className="hidden"
+            onChange={(event) => void handleFileInputChange(event)}
+          />
+          <div
+            onDragOver={handleUploadDragOver}
+            onDragLeave={handleUploadDragLeave}
+            onDrop={(event) => void handleUploadDrop(event)}
+            className={`mb-4 rounded-xl border border-dashed p-4 transition ${
+              isUploadTargetActive ? "border-black bg-zinc-50" : "border-zinc-300 bg-white"
+            } ${uploadingLocal ? "opacity-70" : ""}`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-zinc-900">Add images from your device</p>
+                <p className="text-xs text-zinc-500">
+                  Drop files here or use the button. Files with the same name and size can still be added.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenFilePicker}
+                disabled={uploadingLocal || reorderingFolder !== null}
+                className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+              >
+                {uploadingLocal ? "Uploading…" : "Add from device"}
+              </button>
+            </div>
+          </div>
+          {displayFiles.length > 0 && <div className="space-y-4">
             {librarySections.map((section) => {
               const activeInsertIndex = dragState?.folderKey === section.folderKey ? dragState.overIndex : null;
+              const sectionList = (
+                <ul
+                  key={section.folderKey || "__root__"}
+                  ref={(node) => handleSectionRef(section.folderKey, node)}
+                  className="flex flex-col gap-2"
+                >
+                  {section.files.map((file, index) => {
+                    const isDragging = dragState?.activePath === file.relativePath;
+                    const topInsertActive = activeInsertIndex === index;
+                    return (
+                      <li
+                        key={file.relativePath}
+                        data-library-item="true"
+                        className={`relative flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/80 p-3 text-sm transition sm:flex-row sm:items-center ${
+                          isDragging ? "scale-[0.99] opacity-45" : ""
+                        } ${reorderingFolder !== null ? "opacity-70" : ""}`}
+                      >
+                        {topInsertActive && (
+                          <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 -top-2">
+                            <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3 sm:flex-1">
+                          <button
+                            type="button"
+                            aria-label={`Reorder ${file.name}`}
+                            onPointerDown={(event) => handleDragPointerDown(event, file)}
+                            onPointerMove={handleDragPointerMove}
+                            onPointerUp={(event) => void handleDragPointerUp(event)}
+                            onPointerCancel={handleDragPointerCancel}
+                            disabled={uploadingLocal || reorderingFolder !== null}
+                            className={`flex h-16 w-8 flex-shrink-0 touch-none items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 text-zinc-500 transition ${
+                              isDragging ? "cursor-grabbing border-zinc-500 bg-zinc-100" : "cursor-grab hover:border-zinc-500"
+                            } disabled:opacity-60`}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              viewBox="0 0 20 20"
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                            >
+                              <path d="M4 6.5h12" />
+                              <path d="M4 10h12" />
+                              <path d="M4 13.5h12" />
+                            </svg>
+                          </button>
+                          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
+                            <img
+                              src={file.previewUrl}
+                              alt={file.name}
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                          <div className="flex-1 overflow-hidden">
+                            <p className="truncate font-medium text-zinc-900">{file.name}</p>
+                            <p className="text-xs text-zinc-500">
+                              {formatFileSize(file.size)} · {file.relativePath}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="sm:w-32">
+                          <button
+                            type="button"
+                            onClick={() => void onDeleteFile(file.relativePath)}
+                            disabled={uploadingLocal || deletingPath === file.relativePath || reorderingFolder !== null}
+                            className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
+                          >
+                            {deletingPath === file.relativePath ? "Removing…" : "Remove"}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {activeInsertIndex === section.files.length && (
+                    <li aria-hidden="true" className="list-none px-2">
+                      <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
+                    </li>
+                  )}
+                </ul>
+              );
+              if (!section.folderKey) {
+                return sectionList;
+              }
               return (
-                <div key={section.folderKey || "__root__"} className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
+                <div key={section.folderKey} className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-3">
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-sm">
                     <div className="space-y-1">
                       <p className="font-semibold text-zinc-900">{section.label}</p>
-                      <p className="text-xs text-zinc-500">{section.folderKey || library.rootLabel}</p>
+                      <p className="text-xs text-zinc-500">{section.folderKey}</p>
                     </div>
                     <span className="text-xs text-zinc-500">
                       {section.files.length} image{section.files.length === 1 ? "" : "s"}
                     </span>
                   </div>
-                  <ul
-                    className="flex flex-col gap-2"
-                    onDragOver={(event) => handleSectionDragOver(event, section.folderKey)}
-                    onDrop={(event) => void handleSectionDrop(event, section.folderKey)}
-                  >
-                    {section.files.map((file, index) => {
-                      const isDragging = dragState?.activePath === file.relativePath;
-                      const topInsertActive = activeInsertIndex === index;
-                      return (
-                        <li
-                          key={file.relativePath}
-                          data-library-item="true"
-                          draggable={reorderingFolder === null}
-                          onDragStart={(event) => handleDragStart(event, file)}
-                          onDragEnd={handleDragEnd}
-                          className={`relative flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white/80 p-3 text-sm transition sm:flex-row sm:items-center ${
-                            isDragging ? "cursor-grabbing opacity-50" : "cursor-grab"
-                          } ${reorderingFolder !== null ? "opacity-70" : ""}`}
-                        >
-                          {topInsertActive && (
-                            <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 -top-2">
-                              <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
-                            </div>
-                          )}
-                          <div className="flex items-center gap-3 sm:flex-1">
-                            <div className="flex h-16 w-8 flex-shrink-0 items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 text-zinc-500">
-                              <svg
-                                aria-hidden="true"
-                                viewBox="0 0 20 20"
-                                className="h-4 w-4"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="1.8"
-                                strokeLinecap="round"
-                              >
-                                <path d="M4 6.5h12" />
-                                <path d="M4 10h12" />
-                                <path d="M4 13.5h12" />
-                              </svg>
-                            </div>
-                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
-                              <img
-                                src={file.previewUrl}
-                                alt={file.name}
-                                loading="lazy"
-                                className="h-full w-full object-cover"
-                              />
-                            </div>
-                            <div className="flex-1 overflow-hidden">
-                              <p className="truncate font-medium text-zinc-900">{file.name}</p>
-                              <p className="text-xs text-zinc-500">
-                                {formatFileSize(file.size)} · {file.relativePath}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="sm:w-32">
-                            <button
-                              type="button"
-                              onClick={() => void onDeleteFile(file.relativePath)}
-                              disabled={deletingPath === file.relativePath || reorderingFolder !== null}
-                              className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
-                            >
-                              {deletingPath === file.relativePath ? "Removing…" : "Remove"}
-                            </button>
-                          </div>
-                        </li>
-                      );
-                    })}
-                    {activeInsertIndex === section.files.length && (
-                      <li aria-hidden="true" className="list-none px-2">
-                        <div className="h-1.5 rounded-full bg-zinc-900 shadow-sm" />
-                      </li>
-                    )}
-                  </ul>
+                  {sectionList}
                 </div>
               );
             })}
-          </div>
+          </div>}
+          {displayFiles.length === 0 && <p className="text-sm text-zinc-500">No images saved yet.</p>}
         </div>
       )}
-      {library && displayFiles.length === 0 && <p className="text-sm text-zinc-500">No images saved yet.</p>}
       {isRemoveAllDialogOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 px-4 backdrop-blur-sm"
@@ -1148,6 +1365,36 @@ function formatFileSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
   return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function isSupportedLocalImageFile(file: File) {
+  if (["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type)) {
+    return true;
+  }
+  const lowerName = file.name.toLowerCase();
+  return [".jpg", ".jpeg", ".png", ".webp", ".gif"].some((extension) => lowerName.endsWith(extension));
+}
+
+function buildUploadNotice({
+  addedCount,
+  failedCount,
+  ignoredCount,
+}: {
+  addedCount: number;
+  failedCount: number;
+  ignoredCount: number;
+}) {
+  const parts: string[] = [];
+  if (addedCount > 0) {
+    parts.push(`Added ${addedCount} image${addedCount === 1 ? "" : "s"}`);
+  }
+  if (ignoredCount > 0) {
+    parts.push(`Ignored ${ignoredCount} non-image file${ignoredCount === 1 ? "" : "s"}`);
+  }
+  if (failedCount > 0) {
+    parts.push(`${failedCount} upload${failedCount === 1 ? "" : "s"} failed`);
+  }
+  return parts.length > 0 ? `${parts.join(". ")}.` : "No files were added.";
 }
 
 function getFolderKeyFromRelativePath(relativePath: string) {

@@ -1,3 +1,4 @@
+import fontkit from "@pdf-lib/fontkit";
 import { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import {
   DEFAULT_IMAGE_LIBRARY,
@@ -7,8 +8,9 @@ import {
 } from "./constants";
 import { loadImageAssets } from "./assets";
 import { createOverlayConfig } from "./overlay-config";
+import { readBookFont } from "./font-library";
 import { OverlayConfig, StandardFontName, TextEntry } from "./types";
-import { buildEntryStory, drawParagraphs, estimateStoryHeight, ParagraphLayout } from "./text-layout";
+import { drawParagraphs, estimateStoryHeight, layoutText, layoutTextWithFont, ParagraphLayout } from "./text-layout";
 import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
 import { hexToRgb } from "./colors";
 
@@ -26,6 +28,7 @@ export interface FullFactOptions {
   factsPerPage: number;
   imageLibrary?: string;
   overlayOpacity?: number;
+  boxTextFontId?: string;
   pageWidth?: number;
   pageHeight?: number;
   totalPages?: number;
@@ -37,6 +40,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     factsPerPage,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
     overlayOpacity = 0.9,
+    boxTextFontId,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
@@ -67,6 +71,15 @@ export async function renderFullFactBook(options: FullFactOptions) {
     }
     return fontCache.get(font)!;
   };
+  let customBoxTextFont: PDFFont | null = null;
+  if (boxTextFontId) {
+    const selectedFont = await readBookFont(boxTextFontId);
+    if (!selectedFont) {
+      throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
+    }
+    pdf.registerFontkit(fontkit);
+    customBoxTextFont = await pdf.embedFont(selectedFont.bytes, { subset: true });
+  }
 
   const assets = await loadImageAssets(imageLibrary);
   const embeddedImages: PDFImage[] = [];
@@ -80,7 +93,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     const page = pdf.addPage([pageWidth, pageHeight]);
     drawImageBackground(page, embeddedImages, assets, pageIndex, pageWidth, pageHeight);
     if (pageIndex % 2 === 1 && chunkIndex < chunks.length) {
-      await drawFactStack(page, chunks[chunkIndex], cardOverlayConfig, getFont, pageWidth, pageHeight);
+      await drawFactStack(page, chunks[chunkIndex], cardOverlayConfig, getFont, customBoxTextFont, pageWidth, pageHeight);
       chunkIndex++;
     }
   }
@@ -132,6 +145,7 @@ async function drawFactStack(
   entries: TextEntry[],
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTextFont: PDFFont | null,
   pageWidth: number,
   pageHeight: number
 ) {
@@ -151,7 +165,7 @@ async function drawFactStack(
 
   const prepared: Array<{ entry: TextEntry; story: ParagraphLayout[]; height: number }> = [];
   for (const entry of entries) {
-    const story = await buildEntryStory(entry, config, getFont, textWidth);
+    const story = await buildFactCardStory(entry, config, getFont, textWidth, customBoxTextFont);
     const estimated = estimateStoryHeight(story);
     const cardHeight = Math.max(
       config.minHeight,
@@ -185,6 +199,31 @@ async function drawFactStack(
     );
     cursorY -= gap;
   }
+}
+
+async function buildFactCardStory(
+  entry: TextEntry,
+  config: OverlayConfig,
+  getFont: (font: StandardFontName) => Promise<PDFFont>,
+  maxWidth: number,
+  customBoxTextFont: PDFFont | null
+) {
+  const story: ParagraphLayout[] = [];
+  if (entry.title && config.titleStyle) {
+    if (customBoxTextFont) {
+      story.push(...layoutTextWithFont(entry.title, config.titleStyle, customBoxTextFont, maxWidth));
+    } else {
+      story.push(...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth)));
+    }
+  }
+
+  const body = entry.body || "Share your fact here.";
+  if (customBoxTextFont) {
+    story.push(...layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth));
+  } else {
+    story.push(...(await layoutText(body, config.bodyStyle, getFont, maxWidth)));
+  }
+  return story;
 }
 
 async function drawCard(

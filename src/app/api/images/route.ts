@@ -42,6 +42,10 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const contentType = request.headers.get("content-type") || "";
+    if (contentType.includes("multipart/form-data")) {
+      return await handleLocalUpload(request);
+    }
     const body = await request.json();
     const payload = saveSchema.parse(body);
     const folderPath = sanitizeFolder(payload.folder);
@@ -77,6 +81,37 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unable to save image";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function handleLocalUpload(request: NextRequest) {
+  const formData = await request.formData();
+  const uploadedFile = formData.get("file");
+  const folderValue = formData.get("folder");
+  const folderPath = typeof folderValue === "string" ? sanitizeFolder(folderValue) : "";
+  const targetDirectory = ensureWithinRoot(folderPath ? path.join(IMAGES_ROOT, folderPath) : IMAGES_ROOT);
+  await fs.mkdir(targetDirectory, { recursive: true });
+
+  if (!(uploadedFile instanceof File)) {
+    return NextResponse.json({ error: "Missing image file" }, { status: 400 });
+  }
+  if (uploadedFile.size <= 0) {
+    return NextResponse.json({ error: "Image file is empty" }, { status: 400 });
+  }
+
+  const filename = buildUploadFileName(uploadedFile.name, uploadedFile.type);
+  if (!isImageFile(filename)) {
+    return NextResponse.json({ error: "Only JPG, PNG, WEBP, and GIF images are supported" }, { status: 400 });
+  }
+
+  const existingFiles = await collectImageFiles(IMAGES_ROOT);
+  const uniqueFilename = buildUniqueFileName(existingFiles, filename);
+  const filePath = ensureWithinRoot(path.join(targetDirectory, uniqueFilename));
+  const fileBytes = Buffer.from(await uploadedFile.arrayBuffer());
+  await fs.writeFile(filePath, fileBytes);
+
+  const savedAs = path.relative(IMAGES_ROOT, filePath) || path.basename(filePath);
+  await appendFileToOrder(toRelativeFolderPath(targetDirectory), path.basename(filePath));
+  return NextResponse.json({ savedAs });
 }
 
 export async function DELETE(request: NextRequest) {
@@ -238,6 +273,15 @@ function buildBaseFileName(title: string | undefined, extension: string) {
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
   return `${slug || "image"}${extension}`;
+}
+
+function buildUploadFileName(originalName: string, contentType: string) {
+  const baseName = path.basename(originalName || "").trim();
+  const rawExtension = path.extname(baseName).toLowerCase();
+  const extension = IMAGE_EXTENSIONS.has(rawExtension) ? rawExtension : pickExtension(contentType || null, originalName || "");
+  const stem = rawExtension ? baseName.slice(0, -rawExtension.length) : baseName;
+  const cleanedStem = stem.replace(/[<>:"/\\|?*\u0000-\u001F]+/g, "-").replace(/\s+/g, " ").trim();
+  return `${cleanedStem || "image"}${extension}`;
 }
 
 function buildUniqueFileName(files: RawCollectedFile[], baseFilename: string) {

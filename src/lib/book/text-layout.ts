@@ -33,11 +33,21 @@ export async function layoutText(
   maxWidth: number,
   fallback = "Share your fact here."
 ) {
+  const font = await getFont(style.font);
+  return layoutTextWithFont(text, style, font, maxWidth, fallback);
+}
+
+export function layoutTextWithFont(
+  text: string,
+  style: ParagraphStyle,
+  font: PDFFont,
+  maxWidth: number,
+  fallback = "Share your fact here."
+) {
   const cleaned = text?.replace(/\r\n/g, "\n") ?? "";
   const chunks = cleaned ? cleaned.split(/\n\n+/) : [];
   const normalized = chunks.map((chunk) => chunk.trim()).filter(Boolean);
   const paragraphs = normalized.length ? normalized : [fallback];
-  const font = await getFont(style.font);
   return paragraphs.map<ParagraphLayout>((paragraph) => ({
     lines: wrapLines(paragraph, font, style.fontSize, maxWidth),
     font,

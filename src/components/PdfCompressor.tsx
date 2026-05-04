@@ -1,6 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent as ReactDragEvent,
+} from "react";
 
 type QualityPreset = "printer" | "prepress" | "ebook" | "screen";
 
@@ -23,12 +30,18 @@ function toSafeBasename(name: string) {
   return cleaned.toLowerCase().endsWith(".pdf") ? cleaned.slice(0, -4) : cleaned;
 }
 
+function isPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
 export function PdfCompressor() {
   const [file, setFile] = useState<File | null>(null);
   const [quality, setQuality] = useState<QualityPreset>("printer");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ original: number; compressed: number } | null>(null);
+  const [isDropTargetActive, setIsDropTargetActive] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const canSubmit = !!file && !isLoading;
   const ratio = useMemo(() => {
@@ -36,9 +49,64 @@ export function PdfCompressor() {
     return stats.compressed / stats.original;
   }, [stats]);
 
+  const handleSelectedFiles = useCallback((files: File[]) => {
+    if (files.length === 0) {
+      return;
+    }
+    if (files.length > 1) {
+      setError("Choose one PDF at a time.");
+      return;
+    }
+    const nextFile = files[0];
+    if (!isPdfFile(nextFile)) {
+      setError("Only PDF files are supported.");
+      return;
+    }
+    setFile(nextFile);
+    setError(null);
+    setStats(null);
+  }, []);
+
+  const handleOpenFilePicker = useCallback(() => {
+    if (isLoading) {
+      return;
+    }
+    fileInputRef.current?.click();
+  }, [isLoading]);
+
+  const handleFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    handleSelectedFiles(Array.from(event.target.files ?? []));
+    event.target.value = "";
+  }, [handleSelectedFiles]);
+
+  const handleDragOver = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    if (isLoading) {
+      return;
+    }
+    setIsDropTargetActive(true);
+  }, [isLoading]);
+
+  const handleDragLeave = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) {
+      return;
+    }
+    setIsDropTargetActive(false);
+  }, []);
+
+  const handleDrop = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDropTargetActive(false);
+    if (isLoading) {
+      return;
+    }
+    handleSelectedFiles(Array.from(event.dataTransfer.files ?? []));
+  }, [handleSelectedFiles, isLoading]);
+
   async function handleCompress() {
     if (!file) return;
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    if (!isPdfFile(file)) {
       setError("Only PDF files are supported.");
       return;
     }
@@ -83,20 +151,44 @@ export function PdfCompressor() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <label className="flex flex-col gap-2 md:col-span-2">
+        <div className="flex flex-col gap-2 md:col-span-2">
           <span className="text-sm font-medium text-zinc-900">PDF file</span>
           <input
+            ref={fileInputRef}
             type="file"
             accept="application/pdf,.pdf"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-            className="block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-zinc-900 file:px-3 file:py-2 file:text-sm file:font-semibold file:text-white hover:file:bg-zinc-800"
+            className="hidden"
+            onChange={handleFileInputChange}
           />
-          {file && (
-            <span className="text-xs text-zinc-600">
-              Selected: {file.name} ({formatBytes(file.size)})
-            </span>
-          )}
-        </label>
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`rounded-xl border border-dashed p-4 transition ${
+              isDropTargetActive ? "border-black bg-zinc-50" : "border-zinc-300 bg-white"
+            } ${isLoading ? "opacity-70" : ""}`}
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-zinc-900">Drop a PDF here</p>
+                <p className="text-xs text-zinc-600">Or choose one from your device. Only PDF files are accepted.</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenFilePicker}
+                disabled={isLoading}
+                className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+              >
+                Choose PDF
+              </button>
+            </div>
+            {file && (
+              <p className="mt-3 text-xs text-zinc-600">
+                Selected: {file.name} ({formatBytes(file.size)})
+              </p>
+            )}
+          </div>
+        </div>
 
         <label className="flex flex-col gap-2">
           <span className="text-sm font-medium text-zinc-900">Quality preset</span>

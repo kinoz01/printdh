@@ -12,6 +12,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@pdf-lib/fontkit": "^1.1.1",
+    "fflate": "^0.8.2",
     "image-size": "^2.0.2",
     "natural-orderby": "^5.0.0",
     "next": "16.2.1",
