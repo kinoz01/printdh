@@ -8,6 +8,11 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   showOnEven: true,
   showOnOdd: false,
   margin: 0.75 * 72,
+  marginTop: 0.75 * 72,
+  marginRight: 0.75 * 72,
+  marginBottom: 0.75 * 72,
+  marginLeft: 0.75 * 72,
+  maxBoxWidth: null,
   horizontalPadding: 0.2 * 72,
   verticalPadding: 0.2 * 72,
   minHeight: 0.5 * 72,
@@ -54,9 +59,15 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
 };
 
 export function createOverlayConfig(overrides: Partial<OverlayConfig> = {}): OverlayConfig {
+  const margin = overrides.margin ?? DEFAULT_OVERLAY_CONFIG.margin;
   const config: OverlayConfig = {
     ...DEFAULT_OVERLAY_CONFIG,
     ...overrides,
+    margin,
+    marginTop: overrides.marginTop ?? margin,
+    marginRight: overrides.marginRight ?? margin,
+    marginBottom: overrides.marginBottom ?? margin,
+    marginLeft: overrides.marginLeft ?? margin,
     bodyStyle: overrides.bodyStyle ?? DEFAULT_OVERLAY_CONFIG.bodyStyle,
     titleStyle:
       overrides.titleStyle === null ? null : overrides.titleStyle ?? DEFAULT_OVERLAY_CONFIG.titleStyle,

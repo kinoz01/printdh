@@ -230,6 +230,68 @@ const STACKED_EVEN_FACTS_PLACEHOLDER = `[
 "The 'Long Black' is a style of coffee popular in Australia and New Zealand, made by pouring espresso over hot water.",
 "Even today, some people use coffee grounds to predict the future, a practice known as tasseography."
 ]`;
+const DESCRIBED_PICTURES_PLACEHOLDER = `[
+  "1964 Pontiac GTO",
+  "1965 Shelby GT350",
+  "1966 Oldsmobile 442",
+  "1967 Chevrolet Camaro Z/28",
+  "1967 Pontiac Firebird",
+  "1968 Dodge Charger R/T",
+  "1968 Plymouth Road Runner",
+  "1969 Ford Mustang Boss 429",
+  "1969 Chevrolet Chevelle SS 396",
+  "1969 Dodge Super Bee",
+  "1969 AMC AMX",
+  "1969 Pontiac GTO Judge",
+  "1969 Mercury Cougar Eliminator",
+  "1970 Plymouth Hemi 'Cuda",
+  "1970 Dodge Challenger R/T",
+  "1970 Buick GSX",
+  "1970 Chevrolet Nova SS",
+  "1970 Oldsmobile 442 W-30",
+  "1970 Ford Torino Cobra",
+  "1970 Pontiac Trans Am",
+  "1970 AMC Rebel Machine",
+  "1970 Plymouth Superbird",
+  "1970 Dodge Charger Daytona",
+  "1971 Plymouth GTX",
+  "1971 Ford Mustang Mach 1",
+  "1971 Chevrolet Monte Carlo SS",
+  "1971 Dodge Demon 340",
+  "1971 Pontiac GTO Judge",
+  "1971 AMC Javelin AMX",
+  "1972 Chevrolet Camaro SS",
+  "1972 Dodge Challenger Rallye",
+  "1972 Plymouth Duster 340",
+  "1973 Pontiac Firebird Formula",
+  "1973 Ford Mustang Mach 1",
+  "1973 Chevrolet Chevelle Laguna",
+  "1973 Dodge Charger SE",
+  "1974 Pontiac Trans Am Super Duty",
+  "1974 AMC Matador X",
+  "1975 Chevrolet Camaro LT",
+  "1976 Pontiac Firebird Formula",
+  "1977 Dodge Charger Daytona",
+  "1977 Pontiac Trans Am",
+  "1978 Chevrolet Camaro Z28",
+  "1978 Ford Mustang II King Cobra",
+  "1979 Pontiac Trans Am 10th Anniversary",
+  "1980 Chevrolet Camaro Z28",
+  "1981 Pontiac Firebird Turbo Trans Am",
+  "1982 Chevrolet Camaro Z28",
+  "1984 Ford Mustang SVO",
+  "1985 Chevrolet Camaro IROC-Z",
+  "1987 Buick GNX",
+  "1987 Ford Mustang GT",
+  "1990 Chevrolet Corvette ZR-1",
+  "1991 Ford Mustang LX 5.0",
+  "1993 Chevrolet Camaro Z28",
+  "1993 Ford Mustang SVT Cobra",
+  "1996 Chevrolet Impala SS",
+  "1997 Pontiac Firebird WS6",
+  "1999 Ford Mustang SVT Cobra",
+  "2000 Chevrolet Camaro SS"
+]`;
 
 export function GeneratorApp(props: GeneratorAppProps) {
   const [step, setStep] = useState<WizardStep>(1);
@@ -248,6 +310,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
     useState<DescribedPictureTextAlignment>("center");
+  const [describedPictureMaxBoxWidth, setDescribedPictureMaxBoxWidth] = useState(6.2);
   const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
   const [factsPerPage, setFactsPerPage] = useState(4);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
@@ -657,6 +720,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
+    const safeDescribedPictureMaxBoxWidth = Number.isFinite(describedPictureMaxBoxWidth)
+      ? Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
+      : 6.2;
     const base: Record<string, unknown> = {
       mode,
       imageLibrary,
@@ -692,6 +758,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }
     if (mode === "described-pictures") {
       base.describedPictureTextAlignment = describedPictureTextAlignment;
+      base.describedPictureMaxBoxWidth = safeDescribedPictureMaxBoxWidth * 72;
     }
     if (mode === "dictionary") {
       base.targetImageSize = targetImageSize * 72;
@@ -710,6 +777,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     list,
     listDescription,
     describedPictureTextAlignment,
+    describedPictureMaxBoxWidth,
     factsPerPage,
     fullFactBoxFontId,
     selectedFullFactFont,
@@ -929,6 +997,24 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   );
                 })}
               </div>
+              <label className="flex flex-col gap-2 sm:max-w-xs">
+                <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
+                <input
+                  type="number"
+                  min={3}
+                  max={7}
+                  step={0.1}
+                  value={describedPictureMaxBoxWidth}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setDescribedPictureMaxBoxWidth(Number.isFinite(next) ? next : 6.2);
+                  }}
+                  className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                />
+                <span className="text-xs text-zinc-500">
+                  The caption stays on one line until the box reaches this width, then it wraps.
+                </span>
+              </label>
             </div>
           )}
           {supportsTextFontSelection && (
@@ -1108,13 +1194,21 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   </p>
                 </div>
                 <div
-                  className={`mt-3 text-2xl leading-snug text-zinc-800 ${isDescribedPicturesMode ? "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3" : ""}`}
+                  className={`mt-3 ${isDescribedPicturesMode ? "flex" : ""}`}
                   style={{
-                    fontFamily: selectedFullFactFont.previewFamily,
-                    textAlign: isDescribedPicturesMode ? describedPictureTextAlignment : "left",
+                    justifyContent: isDescribedPicturesMode && describedPictureTextAlignment === "left" ? "flex-start" : "center",
                   }}
                 >
-                  {isDescribedPicturesMode ? "1970 Ford Torino Cobra" : FULL_FACT_FONT_PREVIEW_TEXT}
+                  <div
+                    className={`text-2xl leading-snug text-zinc-800 ${isDescribedPicturesMode ? "max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3" : ""}`}
+                    style={{
+                      fontFamily: selectedFullFactFont.previewFamily,
+                      textAlign: isDescribedPicturesMode ? describedPictureTextAlignment : "left",
+                      maxWidth: isDescribedPicturesMode ? `${Math.round(Math.min(7, Math.max(3, describedPictureMaxBoxWidth)) * 96)}px` : undefined,
+                    }}
+                  >
+                    {isDescribedPicturesMode ? "1970 Ford Torino Cobra" : FULL_FACT_FONT_PREVIEW_TEXT}
+                  </div>
                 </div>
               </div>
               {loadingFonts || availableFonts.length === 0 ? (
@@ -1217,16 +1311,28 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
         {needsList && (
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700">
-              {mode === "described-pictures" ? "Picture Descriptions" : "List Entries"}
-            </label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label htmlFor="list-input" className="text-sm font-medium text-zinc-700">
+                {mode === "described-pictures" ? "Picture Descriptions" : "List Entries"}
+              </label>
+              {mode === "described-pictures" && (
+                <button
+                  type="button"
+                  onClick={() => setList(DESCRIBED_PICTURES_PLACEHOLDER)}
+                  className="self-start rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                >
+                  Use sample JSON
+                </button>
+              )}
+            </div>
             <textarea
+              id="list-input"
               value={list}
               onChange={(event) => setList(event.target.value)}
               className="h-32 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={
                 mode === "described-pictures"
-                  ? 'One caption per line or JSON array, like ["1970 Ford Torino Cobra", "A sleepy koala hugging a eucalyptus branch"]'
+                  ? DESCRIBED_PICTURES_PLACEHOLDER
                   : "Paste data/list.json or provide one item per line"
               }
             />

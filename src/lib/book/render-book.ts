@@ -218,24 +218,29 @@ async function drawOverlay(
   if (entry.skipOverlay) {
     return;
   }
-  const baseOverlayWidth = pageWidth - config.margin * 2;
-  const maxTextWidth = Math.max(20, baseOverlayWidth - config.horizontalPadding * 2);
+  const baseOverlayWidth = pageWidth - config.marginLeft - config.marginRight;
+  const maxOverlayWidth = config.maxBoxWidth ? Math.min(baseOverlayWidth, Math.max(40, config.maxBoxWidth)) : baseOverlayWidth;
+  const maxTextWidth = Math.max(20, maxOverlayWidth - config.horizontalPadding * 2);
   const resolvedTextWidth = await resolveTextWidth(entry, config, getFont, customBoxTextFont, maxTextWidth);
   const textWidth = resolvedTextWidth ?? maxTextWidth;
   const story = await buildOverlayStory(entry, config, getFont, textWidth, customBoxTextFont);
   if (!story.length) {
     return;
   }
-  const overlayWidth = Math.max(40, textWidth + config.horizontalPadding * 2);
+  const overlayWidth = Math.min(maxOverlayWidth, Math.max(40, textWidth + config.horizontalPadding * 2));
   const estimatedHeight = estimateStoryHeight(story);
-  const maxAvailableHeight = Math.min(config.maxHeight, pageHeight - config.margin * 2);
+  const maxAvailableHeight = Math.min(config.maxHeight, pageHeight - config.marginTop - config.marginBottom);
   const overlayHeight = Math.min(
     Math.max(config.minHeight, estimatedHeight + config.verticalPadding * 2),
     maxAvailableHeight
   );
   const centerOverlay = config.centerHorizontally || resolvedTextWidth !== null;
-  const overlayX = centerOverlay ? (pageWidth - overlayWidth) / 2 : config.margin;
-  const overlayY = config.centerVertically ? (pageHeight - overlayHeight) / 2 : config.margin;
+  const overlayX = centerOverlay
+    ? clamp((pageWidth - overlayWidth) / 2, config.marginLeft, pageWidth - config.marginRight - overlayWidth)
+    : config.marginLeft;
+  const overlayY = config.centerVertically
+    ? clamp((pageHeight - overlayHeight) / 2, config.marginBottom, pageHeight - config.marginTop - overlayHeight)
+    : config.marginBottom;
 
   if (config.drawOverlayBox) {
     const fillColor =
@@ -267,8 +272,12 @@ async function drawOverlay(
     : overlayY + overlayHeight - config.verticalPadding - config.textOffsetTop;
 
   let cursorY = yStart;
+  let isFirstParagraph = true;
   for (const paragraph of story) {
-    cursorY = drawParagraphs(page, paragraph, overlayX + config.horizontalPadding, cursorY, textWidth);
+    cursorY = drawParagraphs(page, paragraph, overlayX + config.horizontalPadding, cursorY, textWidth, isFirstParagraph);
+    if (paragraph.lines.length > 0) {
+      isFirstParagraph = false;
+    }
   }
 }
 
@@ -297,20 +306,21 @@ async function fitStoryWidth(
   maxTextWidth: number
 ) {
   const minimumWidth = Math.min(maxTextWidth, Math.max(20, config.contentWidthMin));
-  const candidateWidths = buildCandidateWidths(minimumWidth, maxTextWidth);
-  for (const width of candidateWidths) {
-    const story = await buildOverlayStory(entry, config, getFont, width, customBoxTextFont);
-    if (!story.length) {
-      continue;
-    }
-    if (measureWidestLine(story) > width) {
-      continue;
-    }
-    if (countStoryLines(story) <= config.contentWidthMaxLines) {
-      return width;
-    }
+  const story = await buildOverlayStory(entry, config, getFont, maxTextWidth, customBoxTextFont);
+  if (!story.length) {
+    return null;
   }
-  return null;
+  if (countStoryLines(story) > 1 || entry.title) {
+    return maxTextWidth;
+  }
+  return Math.max(
+    minimumWidth,
+    Math.min(maxTextWidth, measureWidestLine(story) + config.horizontalPadding * 0.5)
+  );
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 async function buildOverlayStory(
@@ -336,18 +346,6 @@ async function buildOverlayStory(
     story.push(...(await layoutText(body, config.bodyStyle, getFont, maxWidth)));
   }
   return story;
-}
-
-function buildCandidateWidths(minimumWidth: number, maxTextWidth: number) {
-  const min = Math.max(20, Math.min(minimumWidth, maxTextWidth));
-  if (min >= maxTextWidth) {
-    return [maxTextWidth];
-  }
-  return [min, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
-    .map((value) => (value <= 1 ? maxTextWidth * value : value))
-    .map((value) => Math.max(min, Math.min(maxTextWidth, value)))
-    .filter((value, index, values) => values.indexOf(value) === index)
-    .sort((left, right) => left - right);
 }
 
 function countStoryLines(story: ParagraphLayout[]) {

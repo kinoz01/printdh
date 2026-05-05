@@ -13,6 +13,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { MAX_KEYWORDS } from "@/lib/image-search/constants";
+
 const PROVIDERS = [
   {
     value: "scraping-win",
@@ -143,6 +145,7 @@ interface DragState {
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const STORAGE_KEY = "image-provider-keys";
+const SEARCH_CACHE_KEY = "image-search-cache-v1";
 const MAX_RESULTS = 36;
 
 export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
@@ -164,6 +167,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
   const [uploadingLocal, setUploadingLocal] = useState(false);
   const [downloadingRootZip, setDownloadingRootZip] = useState(false);
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
+  const [minPixelsInput, setMinPixelsInput] = useState("");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
   const [serverProviderSupport, setServerProviderSupport] = useState<Record<ProviderValue, boolean> | null>(null);
@@ -199,6 +203,31 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
       // ignore corrupted payloads
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const cached = window.localStorage.getItem(SEARCH_CACHE_KEY);
+      if (!cached) {
+        return;
+      }
+      const parsed = parseSearchCache(cached, defaultLimit);
+      if (!parsed) {
+        return;
+      }
+      setKeywordInput(parsed.keywordInput);
+      setMaxResults(parsed.maxResults);
+      setMinFileSizeInput(parsed.minFileSizeInput);
+      setMinPixelsInput(parsed.minPixelsInput);
+      setSelectedProviders(new Set(parsed.selectedProviders));
+      setKeywordGroups(parsed.keywordGroups);
+      setProviderStatus(parsed.providerStatus);
+    } catch {
+      // ignore corrupted payloads
+    }
+  }, [defaultLimit]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -298,11 +327,11 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
     }
     setIsSearching(true);
     setSearchError(null);
-    setProviderStatus(null);
-    setKeywordGroups([]);
     try {
       const limit = Math.min(Math.max(maxResults, 3), MAX_RESULTS);
       const minSizeKb = parseFileSizeInput(minFileSizeInput);
+      const minPixels = parsePixelInput(minPixelsInput);
+      const selectedProviderValues = Array.from(selectedProviders);
       const response = await fetch("/api/image-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -310,7 +339,8 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
           keywords,
           limit,
           minSizeKb,
-          providers: Array.from(selectedProviders),
+          minPixels,
+          providers: selectedProviderValues,
           keys: apiKeys,
         }),
       });
@@ -320,14 +350,24 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
       }
       const payload = await response.json();
       const groups = Array.isArray(payload.keywordGroups) ? (payload.keywordGroups as KeywordGroup[]) : [];
+      const sources = Array.isArray(payload.sources) ? (payload.sources as ProviderStatus[]) : null;
       setKeywordGroups(groups);
-      setProviderStatus(Array.isArray(payload.sources) ? payload.sources : null);
+      setProviderStatus(sources);
+      persistSearchCache({
+        keywordInput,
+        maxResults: limit,
+        minFileSizeInput,
+        minPixelsInput,
+        selectedProviders: selectedProviderValues,
+        keywordGroups: groups,
+        providerStatus: sources,
+      });
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : "Search failed");
     } finally {
       setIsSearching(false);
     }
-  }, [apiKeys, keywords, maxResults, minFileSizeInput, selectedProviders]);
+  }, [apiKeys, keywordInput, keywords, maxResults, minFileSizeInput, minPixelsInput, selectedProviders]);
 
   const handleSave = useCallback(
     async (image: ImageResult) => {
@@ -746,7 +786,9 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
             />
           </label>
           <div className="flex items-center justify-between text-xs text-zinc-500">
-            <span>{keywords.length} / 30 keywords ready</span>
+            <span>
+              {keywords.length} / {MAX_KEYWORDS} keywords ready
+            </span>
             <span>They will be fetched top to bottom.</span>
           </div>
           {keywords.length > 0 && (
@@ -759,7 +801,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
             </div>
           )}
         </div>
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-3 md:grid-cols-3">
           <label className="text-sm font-medium text-zinc-700">
             <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">Max per keyword</span>
             <input
@@ -780,6 +822,18 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
               onChange={(event) => setMinFileSizeInput(event.target.value)}
               className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder="500"
+            />
+          </label>
+          <label className="text-sm font-medium text-zinc-700">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-zinc-500">Min width & height (px)</span>
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={minPixelsInput}
+              onChange={(event) => setMinPixelsInput(event.target.value)}
+              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+              placeholder="1000"
             />
           </label>
         </div>
@@ -821,7 +875,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
             <p className="text-sm font-medium text-zinc-700">
               Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
             </p>
-            <div className="space-y-6">
+            <div className="grid gap-6 xl:grid-cols-2">
               <div className="space-y-3">
                 <h5 className="text-sm font-semibold text-zinc-800">Grouped by provider</h5>
                 {providerBuckets.length === 0 && <p className="text-xs text-zinc-500">No providers returned images yet.</p>}
@@ -852,6 +906,43 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
                           )}
                         </div>
                       ))}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="space-y-3">
+                <h5 className="text-sm font-semibold text-zinc-800">Grouped by keyword</h5>
+                {keywordGroups.map((group, groupIndex) => {
+                  const keywordTotal = group.providers.reduce((sum, bucket) => sum + bucket.results.length, 0);
+                  return (
+                    <div key={group.keyword} className="space-y-4 rounded-xl border border-zinc-200 bg-white p-4">
+                      <div className="flex flex-col gap-1 text-sm">
+                        <p className="font-semibold text-zinc-900">
+                          {groupIndex + 1}. {group.keyword}
+                        </p>
+                        <p className="text-xs text-zinc-500">{keywordTotal} images</p>
+                      </div>
+                      {group.providers.map((bucket) => {
+                        const providerLabel = getProviderLabel(bucket.provider);
+                        return (
+                          <div key={`${group.keyword}-${bucket.provider}`} className="space-y-2">
+                            <div className="flex flex-wrap items-center justify-between text-xs text-zinc-500">
+                              <span className="font-medium text-zinc-800">{providerLabel}</span>
+                              <span>{bucket.results.length} matches</span>
+                            </div>
+                            {bucket.error && <p className="text-xs text-red-600">{bucket.error}</p>}
+                            {bucket.results.length > 0 ? (
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                {bucket.results.map((result, index) =>
+                                  renderResultCard(result, `${group.keyword}-${bucket.provider}-${index}`)
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-zinc-500">No images passed the filters.</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   );
                 })}
@@ -1396,7 +1487,7 @@ function parseKeywords(value: string) {
     .split(/[\n,]+/)
     .map((entry) => entry.trim())
     .filter(Boolean)
-    .slice(0, 30);
+    .slice(0, MAX_KEYWORDS);
 }
 
 function parseFileSizeInput(value: string) {
@@ -1410,8 +1501,88 @@ function parseFileSizeInput(value: string) {
   return Math.round(parsed);
 }
 
+function parsePixelInput(value: string) {
+  if (!value || !value.trim()) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined;
+  }
+  return Math.round(parsed);
+}
+
 function countImagesInKeywordGroups(groups: KeywordGroup[]) {
   return groups.reduce((sum, group) => sum + group.providers.reduce((inner, bucket) => inner + bucket.results.length, 0), 0);
+}
+
+function parseSearchCache(raw: string, defaultLimit: number) {
+  const parsed = JSON.parse(raw) as Partial<{
+    keywordInput: unknown;
+    maxResults: unknown;
+    minFileSizeInput: unknown;
+    minPixelsInput: unknown;
+    selectedProviders: unknown;
+    keywordGroups: unknown;
+    providerStatus: unknown;
+  }>;
+
+  if (!Array.isArray(parsed.keywordGroups)) {
+    return null;
+  }
+
+  return {
+    keywordInput: typeof parsed.keywordInput === "string" ? parsed.keywordInput : "",
+    maxResults: clampResultLimit(parsed.maxResults, defaultLimit),
+    minFileSizeInput: typeof parsed.minFileSizeInput === "string" ? parsed.minFileSizeInput : "",
+    minPixelsInput: typeof parsed.minPixelsInput === "string" ? parsed.minPixelsInput : "",
+    selectedProviders: normalizeSelectedProviders(parsed.selectedProviders),
+    keywordGroups: parsed.keywordGroups as KeywordGroup[],
+    providerStatus: Array.isArray(parsed.providerStatus) ? (parsed.providerStatus as ProviderStatus[]) : null,
+  };
+}
+
+function persistSearchCache(payload: {
+  keywordInput: string;
+  maxResults: number;
+  minFileSizeInput: string;
+  minPixelsInput: string;
+  selectedProviders: ProviderValue[];
+  keywordGroups: KeywordGroup[];
+  providerStatus: ProviderStatus[] | null;
+}) {
+  if (typeof window === "undefined") {
+    return;
+  }
+  try {
+    window.localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore quota issues
+  }
+}
+
+function clampResultLimit(value: unknown, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+  return Math.min(MAX_RESULTS, Math.max(3, Math.round(value)));
+}
+
+function normalizeSelectedProviders(value: unknown) {
+  const providers = new Set<ProviderValue>(["scraping-win"]);
+  if (!Array.isArray(value)) {
+    return Array.from(providers);
+  }
+  for (const item of value) {
+    if (isProviderValue(item)) {
+      providers.add(item);
+    }
+  }
+  return Array.from(providers);
+}
+
+function isProviderValue(value: unknown): value is ProviderValue {
+  return typeof value === "string" && PROVIDERS.some((provider) => provider.value === value);
 }
 
 function getProviderLabel(value: ProviderValue) {

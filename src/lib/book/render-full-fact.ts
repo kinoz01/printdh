@@ -254,8 +254,19 @@ async function drawCard(
     borderOpacity: config.opacity,
   });
   let cursorY = y + height - config.verticalPadding;
+  let isFirstParagraph = true;
   for (const paragraph of story) {
-    cursorY = drawParagraphs(page, paragraph, x + config.horizontalPadding, cursorY, width - 2 * config.horizontalPadding);
+    cursorY = drawParagraphs(
+      page,
+      paragraph,
+      x + config.horizontalPadding,
+      cursorY,
+      width - 2 * config.horizontalPadding,
+      isFirstParagraph
+    );
+    if (paragraph.lines.length > 0) {
+      isFirstParagraph = false;
+    }
   }
   if (config.showNumber && typeof entry.number === "number") {
     await drawNumberBadge(page, entry.number, x, y, height, config, getFont);

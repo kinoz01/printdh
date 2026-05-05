@@ -3,6 +3,8 @@ import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { MAX_KEYWORDS } from "@/lib/image-search/constants";
+
 const PROVIDERS = ["scraping-win", "google", "pixabay", "pexels", "brave"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
@@ -11,10 +13,11 @@ const requestSchema = z.object({
   keywords: z
     .array(z.string().min(1))
     .min(1, "Provide at least one keyword")
-    .max(30, "Limit searches to 30 keywords")
+    .max(MAX_KEYWORDS, `Limit searches to ${MAX_KEYWORDS} keywords`)
     .optional(),
   limit: z.number().int().min(3).max(60).optional(),
   minSizeKb: z.number().int().min(0).max(200000).optional(),
+  minPixels: z.number().int().min(0).max(10000).optional(),
   providers: z.array(z.enum(PROVIDERS)).min(1),
   keys: z
     .object({
@@ -49,6 +52,7 @@ type ProviderKeys = {
 interface SearchOptions {
   limit: number;
   minFileSizeBytes?: number;
+  minPixels?: number;
   keys: ProviderKeys;
   uniqueProviders: Provider[];
   activeProviders: Provider[];
@@ -119,6 +123,7 @@ interface BraveResult {
 
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const DEFAULT_LIMIT = 18;
+const FILTER_FETCH_MULTIPLIER = 3;
 const ENV_PATH = path.resolve(process.cwd(), ".env");
 let envCache: Record<string, string> | null = null;
 
@@ -163,6 +168,7 @@ function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptio
   const limit = payload.limit ?? DEFAULT_LIMIT;
   const minSizeKb = typeof payload.minSizeKb === "number" ? payload.minSizeKb : undefined;
   const minFileSizeBytes = typeof minSizeKb === "number" && minSizeKb > 0 ? minSizeKb * 1024 : undefined;
+  const minPixels = typeof payload.minPixels === "number" && payload.minPixels > 0 ? payload.minPixels : undefined;
   const envDefaults = getServerProviderKeys();
   const keys: ProviderKeys = {
     googleApiKey: payload.keys?.googleApiKey || envDefaults.googleApiKey,
@@ -176,6 +182,7 @@ function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptio
   return {
     limit,
     minFileSizeBytes,
+    minPixels,
     keys,
     uniqueProviders,
     activeProviders,
@@ -196,7 +203,7 @@ async function runSearch(options: SearchOptions) {
   for (const keyword of options.keywords) {
     const providers = await Promise.all(
       options.activeProviders.map((provider) =>
-        searchProviderForKeyword(provider, keyword, options.limit, options.minFileSizeBytes, options.keys)
+        searchProviderForKeyword(provider, keyword, options.limit, options.minFileSizeBytes, options.minPixels, options.keys)
       )
     );
 
@@ -225,17 +232,19 @@ async function searchProviderForKeyword(
   keyword: string,
   limit: number,
   minFileSizeBytes: number | undefined,
+  minPixels: number | undefined,
   keys: ProviderKeys
 ): Promise<ProviderBucket> {
   try {
-    const promise = buildProviderPromise(provider, keyword, limit, keys);
+    const providerLimit = shouldOverfetchForFilters(minPixels) ? limit * FILTER_FETCH_MULTIPLIER : limit;
+    const promise = buildProviderPromise(provider, keyword, providerLimit, keys);
     if (!promise) {
       throw new Error("Provider not configured");
     }
     const rawResults = await promise;
     const deduped = dedupeResults(rawResults);
     const withSizes = await fillMissingFileSizes(deduped);
-    const filtered = applyFileSizeFilter(withSizes, minFileSizeBytes);
+    const filtered = applyDimensionFilter(applyFileSizeFilter(withSizes, minFileSizeBytes), minPixels);
     const limited = filtered.slice(0, limit);
     return {
       provider,
@@ -264,7 +273,7 @@ function buildKeywordList(keywords?: string[], fallbackQuery?: string | null) {
       list.push(trimmed);
     }
   }
-  return list.slice(0, 30);
+  return list.slice(0, MAX_KEYWORDS);
 }
 
 function isProviderConfigured(provider: Provider, keys: ProviderKeys) {
@@ -358,6 +367,23 @@ function applyFileSizeFilter(images: RemoteImageResult[], minBytes?: number) {
     return images;
   }
   return images.filter((image) => typeof image.fileSize === "number" && image.fileSize >= minBytes);
+}
+
+function applyDimensionFilter(images: RemoteImageResult[], minPixels?: number) {
+  if (!minPixels) {
+    return images;
+  }
+  return images.filter(
+    (image) =>
+      typeof image.width === "number" &&
+      typeof image.height === "number" &&
+      image.width >= minPixels &&
+      image.height >= minPixels
+  );
+}
+
+function shouldOverfetchForFilters(minPixels?: number) {
+  return typeof minPixels === "number" && minPixels > 0;
 }
 
 async function fetchFileSize(url: string, timeoutMs: number) {

@@ -78,14 +78,24 @@ export function wrapLines(text: string, font: PDFFont, fontSize: number, maxWidt
 
 export function estimateStoryHeight(story: ParagraphLayout[]) {
   let height = 0;
+  let lastDescender = 0;
+  let hasLines = false;
   for (const paragraph of story) {
-    const lines = paragraph.lines.length || 1;
-    height += lines * paragraph.style.leading;
-    if (paragraph.style.spaceAfter) {
+    const metrics = getParagraphMetrics(paragraph);
+    for (let index = 0; index < paragraph.lines.length; index++) {
+      if (!hasLines) {
+        height += metrics.ascentHeight;
+        hasLines = true;
+      } else {
+        height += paragraph.style.leading;
+      }
+      lastDescender = metrics.descenderHeight;
+    }
+    if (paragraph.lines.length > 0 && paragraph.style.spaceAfter) {
       height += paragraph.style.spaceAfter;
     }
   }
-  return height;
+  return hasLines ? height + lastDescender : 0;
 }
 
 export function drawParagraphs(
@@ -93,13 +103,15 @@ export function drawParagraphs(
   paragraph: ParagraphLayout,
   x: number,
   startY: number,
-  width: number
+  width: number,
+  isFirstParagraph = false
 ) {
   let cursorY = startY;
   const { style, font } = paragraph;
+  const metrics = getParagraphMetrics(paragraph);
   for (let index = 0; index < paragraph.lines.length; index++) {
     const line = paragraph.lines[index];
-    cursorY -= style.leading;
+    cursorY -= index === 0 && isFirstParagraph ? metrics.ascentHeight : style.leading;
     const lineWidth = font.widthOfTextAtSize(line, style.fontSize);
     const offset = alignmentOffset(style.alignment, width, lineWidth);
     const options: TextDrawOptions = {
@@ -121,6 +133,13 @@ export function drawParagraphs(
     cursorY -= style.spaceAfter;
   }
   return cursorY;
+}
+
+function getParagraphMetrics(paragraph: ParagraphLayout) {
+  const ascentHeight = paragraph.font.heightAtSize(paragraph.style.fontSize, { descender: false });
+  const fullHeight = paragraph.font.heightAtSize(paragraph.style.fontSize);
+  const descenderHeight = Math.max(0, fullHeight - ascentHeight);
+  return { ascentHeight, descenderHeight, fullHeight };
 }
 
 export function alignmentOffset(alignment: TextAlignment, containerWidth: number, lineWidth: number) {

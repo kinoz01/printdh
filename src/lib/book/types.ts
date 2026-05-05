@@ -33,6 +33,11 @@ export interface OverlayConfig {
   showOnEven: boolean;
   showOnOdd: boolean;
   margin: number;
+  marginTop: number;
+  marginRight: number;
+  marginBottom: number;
+  marginLeft: number;
+  maxBoxWidth: number | null;
   horizontalPadding: number;
   verticalPadding: number;
   minHeight: number;

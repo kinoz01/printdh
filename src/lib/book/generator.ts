@@ -27,6 +27,7 @@ export interface GenerateBookPayload {
   overlayOpacity?: number;
   numberBadgeColor?: NumberBadgeColorKey;
   describedPictureTextAlignment?: Extract<TextAlignment, "left" | "center">;
+  describedPictureMaxBoxWidth?: number;
   factsPerPage?: number;
   fullFactBoxFontId?: string;
   fullFactUploadedFontBytes?: Uint8Array;
@@ -148,6 +149,10 @@ export async function generateBook(payload: GenerateBookPayload) {
           contentWidthMin: 2.3 * 72,
           contentWidthMaxLines: 3,
           centerHorizontally: true,
+          marginLeft: 0.7 * 72,
+          marginRight: 0.7 * 72,
+          marginBottom: 0.7 * 72,
+          maxBoxWidth: payload.describedPictureMaxBoxWidth ?? 6.2 * 72,
           horizontalPadding: 0.26 * 72,
           verticalPadding: 0.16 * 72,
           roundness: 14,
