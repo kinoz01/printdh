@@ -37,6 +37,9 @@ export interface OverlayConfig {
   verticalPadding: number;
   minHeight: number;
   maxHeight: number;
+  fitContentWidth: boolean;
+  contentWidthMin: number;
+  contentWidthMaxLines: number;
   opacity: number;
   roundness: number;
   titleStyle: ParagraphStyle | null;
@@ -70,6 +73,7 @@ export interface OverlayConfig {
   drawOverlayBox: boolean;
   repeatEntries: boolean;
   centerVertically: boolean;
+  centerHorizontally: boolean;
   centerTextVertically: boolean;
   textOffsetTop: number;
 }

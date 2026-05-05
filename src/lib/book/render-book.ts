@@ -1,11 +1,13 @@
+import fontkit from "@pdf-lib/fontkit";
 import { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { DEFAULT_IMAGE_LIBRARY, PAGE_HEIGHT, PAGE_WIDTH, TOTAL_PAGES } from "./constants";
 import { createOverlayConfig } from "./overlay-config";
+import { readBookFont } from "./font-library";
 import type { OverlayConfig, TextEntry } from "./types";
 import { StandardFontName } from "./types";
 import { loadImageAssets } from "./assets";
 import { hexToRgb, mixColors } from "./colors";
-import { buildEntryStory, drawParagraphs, estimateStoryHeight, ParagraphLayout } from "./text-layout";
+import { drawParagraphs, estimateStoryHeight, layoutText, layoutTextWithFont, ParagraphLayout } from "./text-layout";
 import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
 
 export interface RenderBookOptions {
@@ -13,6 +15,8 @@ export interface RenderBookOptions {
   placeholder: string;
   imageLibrary?: string;
   overlayOverrides?: Partial<OverlayConfig>;
+  boxTextFontId?: string;
+  boxTextFontBytes?: Uint8Array;
   pageWidth?: number;
   pageHeight?: number;
   totalPages?: number;
@@ -24,6 +28,8 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     placeholder,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
     overlayOverrides,
+    boxTextFontId,
+    boxTextFontBytes,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
@@ -40,6 +46,17 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
     return fontCache.get(font)!;
   };
+  let customBoxTextFont: PDFFont | null = null;
+  if (boxTextFontBytes || boxTextFontId) {
+    const selectedBytes =
+      boxTextFontBytes ??
+      (boxTextFontId ? (await readBookFont(boxTextFontId))?.bytes ?? null : null);
+    if (!selectedBytes) {
+      throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
+    }
+    pdf.registerFontkit(fontkit);
+    customBoxTextFont = await pdf.embedFont(selectedBytes, { subset: true });
+  }
 
   const imageAssets = await loadImageAssets(imageLibrary);
   const embeddedImages: PDFImage[] = [];
@@ -69,7 +86,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
 
     if (entry) {
-      await drawOverlay(page, entry, overlayConfig, getFont, pageWidth, pageHeight);
+      await drawOverlay(page, entry, overlayConfig, getFont, customBoxTextFont, pageWidth, pageHeight);
     }
   }
 
@@ -194,6 +211,7 @@ async function drawOverlay(
   entry: TextEntry,
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTextFont: PDFFont | null,
   pageWidth: number,
   pageHeight: number
 ) {
@@ -201,13 +219,13 @@ async function drawOverlay(
     return;
   }
   const baseOverlayWidth = pageWidth - config.margin * 2;
-  const defaultTextWidth = Math.max(20, baseOverlayWidth - config.horizontalPadding * 2);
-  const story = await buildEntryStory(entry, config, getFont, defaultTextWidth);
+  const maxTextWidth = Math.max(20, baseOverlayWidth - config.horizontalPadding * 2);
+  const resolvedTextWidth = await resolveTextWidth(entry, config, getFont, customBoxTextFont, maxTextWidth);
+  const textWidth = resolvedTextWidth ?? maxTextWidth;
+  const story = await buildOverlayStory(entry, config, getFont, textWidth, customBoxTextFont);
   if (!story.length) {
     return;
   }
-  const snugWidth = detectSingleLineWidth(entry, story, defaultTextWidth, config);
-  const textWidth = snugWidth ?? defaultTextWidth;
   const overlayWidth = Math.max(40, textWidth + config.horizontalPadding * 2);
   const estimatedHeight = estimateStoryHeight(story);
   const maxAvailableHeight = Math.min(config.maxHeight, pageHeight - config.margin * 2);
@@ -215,7 +233,7 @@ async function drawOverlay(
     Math.max(config.minHeight, estimatedHeight + config.verticalPadding * 2),
     maxAvailableHeight
   );
-  const centerOverlay = snugWidth !== null;
+  const centerOverlay = config.centerHorizontally || resolvedTextWidth !== null;
   const overlayX = centerOverlay ? (pageWidth - overlayWidth) / 2 : config.margin;
   const overlayY = config.centerVertically ? (pageHeight - overlayHeight) / 2 : config.margin;
 
@@ -252,6 +270,101 @@ async function drawOverlay(
   for (const paragraph of story) {
     cursorY = drawParagraphs(page, paragraph, overlayX + config.horizontalPadding, cursorY, textWidth);
   }
+}
+
+async function resolveTextWidth(
+  entry: TextEntry,
+  config: OverlayConfig,
+  getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTextFont: PDFFont | null,
+  maxTextWidth: number
+) {
+  const widestFit = await buildOverlayStory(entry, config, getFont, maxTextWidth, customBoxTextFont);
+  if (!widestFit.length) {
+    return null;
+  }
+  if (config.fitContentWidth) {
+    return fitStoryWidth(entry, config, getFont, customBoxTextFont, maxTextWidth);
+  }
+  return detectSingleLineWidth(entry, widestFit, maxTextWidth, config);
+}
+
+async function fitStoryWidth(
+  entry: TextEntry,
+  config: OverlayConfig,
+  getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTextFont: PDFFont | null,
+  maxTextWidth: number
+) {
+  const minimumWidth = Math.min(maxTextWidth, Math.max(20, config.contentWidthMin));
+  const candidateWidths = buildCandidateWidths(minimumWidth, maxTextWidth);
+  for (const width of candidateWidths) {
+    const story = await buildOverlayStory(entry, config, getFont, width, customBoxTextFont);
+    if (!story.length) {
+      continue;
+    }
+    if (measureWidestLine(story) > width) {
+      continue;
+    }
+    if (countStoryLines(story) <= config.contentWidthMaxLines) {
+      return width;
+    }
+  }
+  return null;
+}
+
+async function buildOverlayStory(
+  entry: TextEntry,
+  config: OverlayConfig,
+  getFont: (font: StandardFontName) => Promise<PDFFont>,
+  maxWidth: number,
+  customBoxTextFont: PDFFont | null
+) {
+  const story: ParagraphLayout[] = [];
+  if (entry.title && config.titleStyle) {
+    if (customBoxTextFont) {
+      story.push(...layoutTextWithFont(entry.title, config.titleStyle, customBoxTextFont, maxWidth));
+    } else {
+      story.push(...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth)));
+    }
+  }
+
+  const body = entry.body || "Share your fact here.";
+  if (customBoxTextFont) {
+    story.push(...layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth));
+  } else {
+    story.push(...(await layoutText(body, config.bodyStyle, getFont, maxWidth)));
+  }
+  return story;
+}
+
+function buildCandidateWidths(minimumWidth: number, maxTextWidth: number) {
+  const min = Math.max(20, Math.min(minimumWidth, maxTextWidth));
+  if (min >= maxTextWidth) {
+    return [maxTextWidth];
+  }
+  return [min, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
+    .map((value) => (value <= 1 ? maxTextWidth * value : value))
+    .map((value) => Math.max(min, Math.min(maxTextWidth, value)))
+    .filter((value, index, values) => values.indexOf(value) === index)
+    .sort((left, right) => left - right);
+}
+
+function countStoryLines(story: ParagraphLayout[]) {
+  return story.reduce((count, paragraph) => count + Math.max(1, paragraph.lines.length), 0);
+}
+
+function measureWidestLine(story: ParagraphLayout[]) {
+  let widest = 0;
+  for (const paragraph of story) {
+    for (const line of paragraph.lines) {
+      const width = paragraph.font.widthOfTextAtSize(line, paragraph.style.fontSize);
+      if (width > widest) {
+        widest = width;
+      }
+    }
+  }
+  return widest;
 }
 
 function detectSingleLineWidth(

@@ -3,6 +3,9 @@ import { parseFactsInput, parseListDescriptionInput, parseListInput, parseLooseF
 import { renderBook } from "./render-book";
 import { renderFullFactBook } from "./render-full-fact";
 import { renderDictionaryBook } from "./render-dictionary";
+import { hexToRgb } from "./colors";
+import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
+import { FACT_STYLE, type TextAlignment } from "./types";
 
 export type BookMode =
   | "facts"
@@ -10,6 +13,7 @@ export type BookMode =
   | "list"
   | "list-description"
   | "list-description-even"
+  | "described-pictures"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -21,6 +25,8 @@ export interface GenerateBookPayload {
   listDescription?: string;
   imageLibrary?: string;
   overlayOpacity?: number;
+  numberBadgeColor?: NumberBadgeColorKey;
+  describedPictureTextAlignment?: Extract<TextAlignment, "left" | "center">;
   factsPerPage?: number;
   fullFactBoxFontId?: string;
   fullFactUploadedFontBytes?: Uint8Array;
@@ -32,6 +38,7 @@ export interface GenerateBookPayload {
 export async function generateBook(payload: GenerateBookPayload) {
   const imageLibrary = payload.imageLibrary || DEFAULT_IMAGE_LIBRARY;
   const opacity = clampOpacity(payload.overlayOpacity ?? 0.9);
+  const numberBadgeFill = hexToRgb(getNumberBadgeColorOption(payload.numberBadgeColor).hex);
   const pageSettings = resolvePageSettings(payload.pageSize, payload.pageCount);
   const sharedPageOptions = {
     pageWidth: pageSettings.width,
@@ -50,6 +57,7 @@ export async function generateBook(payload: GenerateBookPayload) {
           showOnEven: true,
           showOnOdd: false,
           showNumber: true,
+          numberBadgeFill,
           opacity,
         },
         ...sharedPageOptions,
@@ -65,6 +73,7 @@ export async function generateBook(payload: GenerateBookPayload) {
           showOnEven: true,
           showOnOdd: true,
           showNumber: true,
+          numberBadgeFill,
           opacity,
         },
         ...sharedPageOptions,
@@ -113,6 +122,39 @@ export async function generateBook(payload: GenerateBookPayload) {
           showNumber: false,
           opacity,
         },
+        ...sharedPageOptions,
+      });
+    }
+    case "described-pictures": {
+      const entries = parseListInput(payload.list ?? "");
+      return renderBook({
+        entries,
+        placeholder: "Add picture description #{}.",
+        imageLibrary,
+        overlayOverrides: {
+          showOnEven: true,
+          showOnOdd: true,
+          showNumber: false,
+          titleStyle: null,
+          bodyStyle: {
+            ...FACT_STYLE,
+            fontSize: 17,
+            leading: 20,
+            alignment: payload.describedPictureTextAlignment ?? "center",
+          },
+          minHeight: 0.62 * 72,
+          maxHeight: pageSettings.height * 0.24,
+          fitContentWidth: true,
+          contentWidthMin: 2.3 * 72,
+          contentWidthMaxLines: 3,
+          centerHorizontally: true,
+          horizontalPadding: 0.26 * 72,
+          verticalPadding: 0.16 * 72,
+          roundness: 14,
+          opacity,
+        },
+        boxTextFontId: payload.fullFactBoxFontId,
+        boxTextFontBytes: payload.fullFactUploadedFontBytes,
         ...sharedPageOptions,
       });
     }

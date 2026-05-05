@@ -3,6 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
+import {
+  DEFAULT_NUMBER_BADGE_COLOR,
+  NUMBER_BADGE_COLOR_OPTIONS,
+  type NumberBadgeColorKey,
+} from "@/lib/book/number-badge-colors";
 import { ImageStudio } from "./ImageStudio";
 
 const MODES = [
@@ -36,6 +41,12 @@ const MODES = [
   //   description: "Title/description pairing on every spread.",
   //   accent: "from-lime-200 via-emerald-100 to-green-200",
   // },
+  {
+    value: "described-pictures",
+    label: "Described Pictures",
+    description: "A centered caption box at the bottom of every image page.",
+    accent: "from-stone-300 via-neutral-200 to-zinc-300",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
@@ -62,6 +73,7 @@ type ModeValue =
   | "list"
   | "list-description"
   | "list-description-even"
+  | "described-pictures"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -73,6 +85,7 @@ type PageSizeValue = (typeof PAGE_SIZES)[number]["value"];
 
 type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
+type DescribedPictureTextAlignment = "center" | "left";
 
 interface BookFontOption {
   id: string;
@@ -126,6 +139,15 @@ const DEFAULT_FULL_FACT_FONT_OPTION: BookFontOption = {
 const DEFAULT_FULL_FACT_FONT_SOURCE_KEY = "__default_source__";
 const DEFAULT_FULL_FACT_FONT_SOURCE_LABEL = "Default";
 const FULL_FACT_FONT_PREVIEW_TEXT = "Cows remember familiar faces and build strong social bonds.";
+const DEFAULT_DOWNLOAD_TITLE = "Sloths Picture Book with Fascinating Facts";
+const DEFAULT_DOWNLOAD_DESCRIPTION = `Sloths are fascinating because they've mastered a unique, slow-motion lifestyle. They evolved from giant ground sloths the size of elephants into the chill tree-climbers we know today. By hosting entire mini-ecosystems of bugs and algae in their fur, they play a vital role in the rainforest.
+
+Inside, you'll find:
+
+Premium color interior
+Large print (8.5"x8.5")
+Educational and fun facts about cozs
+Wonderful real life sloths photographs that invoke awe and wonder`;
 const STACKED_EVEN_FACTS_PLACEHOLDER = `[
 "Coffee beans are not actually beans; they are the pits (seeds) of bright red berries called coffee cherries.",
 "The legend of coffee's discovery involves an Ethiopian goat herder named Kaldi, who noticed his goats became very energetic after eating certain berries.",
@@ -215,14 +237,17 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [facts, setFacts] = useState(props.initialFacts?.trim() ? props.initialFacts : STACKED_EVEN_FACTS_PLACEHOLDER);
   const [list, setList] = useState(props.initialList ?? "");
   const [listDescription, setListDescription] = useState(props.initialListDescription ?? "");
-  const [downloadTitle, setDownloadTitle] = useState("");
+  const [downloadTitle, setDownloadTitle] = useState(DEFAULT_DOWNLOAD_TITLE);
   const [downloadSubtitle, setDownloadSubtitle] = useState("");
-  const [downloadDescription, setDownloadDescription] = useState("");
+  const [downloadDescription, setDownloadDescription] = useState(DEFAULT_DOWNLOAD_DESCRIPTION);
   const [downloadKeywords, setDownloadKeywords] = useState<string[]>(() => Array.from({ length: 7 }, () => ""));
   const [imageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
   const [pageCount, setPageCount] = useState(40);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
+  const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
+  const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
+    useState<DescribedPictureTextAlignment>("center");
   const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
   const [factsPerPage, setFactsPerPage] = useState(4);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
@@ -353,8 +378,11 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
-  const needsList = ["list"].includes(mode);
+  const needsList = ["list", "described-pictures"].includes(mode);
   const needsListDescription = ["list-description", "list-description-even"].includes(mode);
+  const supportsCircleColor = mode !== "described-pictures";
+  const supportsTextFontSelection = ["full-fact", "described-pictures"].includes(mode);
+  const isDescribedPicturesMode = mode === "described-pictures";
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
   const currentOpacity = mode === "full-fact" ? fullFactOpacity : overlayOpacity;
   const availableFonts = useMemo(() => [...serverFonts, ...browserFonts], [browserFonts, serverFonts]);
@@ -634,6 +662,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
       imageLibrary,
       pageSize,
       pageCount: Math.max(4, Math.min(200, safePageCount)),
+      numberBadgeColor,
     };
     if (needsOverlayOpacity) {
       base.overlayOpacity = currentOpacity;
@@ -649,6 +678,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }
     if (mode === "full-fact") {
       base.factsPerPage = factsPerPage;
+    }
+    if (mode === "full-fact" || mode === "described-pictures") {
       if (selectedFullFactFont.storageScope === "browser" && selectedFullFactFont.dataBase64) {
         base.fullFactUploadedFont = {
           bytesBase64: selectedFullFactFont.dataBase64,
@@ -659,6 +690,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
         base.fullFactBoxFontId = fullFactBoxFontId;
       }
     }
+    if (mode === "described-pictures") {
+      base.describedPictureTextAlignment = describedPictureTextAlignment;
+    }
     if (mode === "dictionary") {
       base.targetImageSize = targetImageSize * 72;
     }
@@ -666,6 +700,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, [
     mode,
     imageLibrary,
+    numberBadgeColor,
     currentOpacity,
     needsOverlayOpacity,
     needsFacts,
@@ -674,6 +709,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     facts,
     list,
     listDescription,
+    describedPictureTextAlignment,
     factsPerPage,
     fullFactBoxFontId,
     selectedFullFactFont,
@@ -746,7 +782,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         <section className="space-y-4">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 1</p>
-            <h2 className="text-xl font-semibold text-zinc-900">Choose a layout</h2>
+            <h2 className="text-xl font-semibold text-zinc-900">Choose a Layout</h2>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {MODES.map((item) => {
@@ -829,11 +865,79 @@ export function GeneratorApp(props: GeneratorAppProps) {
               className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
             />
           </div>
-          {mode === "full-fact" && (
+          {supportsCircleColor && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-zinc-700">Select Circle Color</p>
+                <p className="text-xs text-zinc-500">Used for numbered fact circles</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {NUMBER_BADGE_COLOR_OPTIONS.map((option) => {
+                  const isActive = option.value === numberBadgeColor;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setNumberBadgeColor(option.value)}
+                      aria-pressed={isActive}
+                      className={`flex items-center justify-between rounded-2xl border bg-white px-4 py-3 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                        isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                      }`}
+                    >
+                      <span className="flex items-center gap-3">
+                        <span
+                          className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold text-white shadow-sm"
+                          style={{ backgroundColor: option.hex }}
+                        >
+                          01
+                        </span>
+                        <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
+                      </span>
+                      {isActive ? <span className="text-xs font-medium text-emerald-600">Selected</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {isDescribedPicturesMode && (
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-zinc-700">Text Alignment</p>
+                <p className="text-xs text-zinc-500">Choose how the caption text sits inside the box.</p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {([
+                  { value: "center", label: "Centered", description: "Balanced caption centered inside the box." },
+                  { value: "left", label: "Left Aligned", description: "Caption text starts flush from the left edge." },
+                ] as const).map((option) => {
+                  const isActive = option.value === describedPictureTextAlignment;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setDescribedPictureTextAlignment(option.value)}
+                      aria-pressed={isActive}
+                      className={`flex flex-col gap-1 rounded-2xl border bg-white p-4 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                        isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                      }`}
+                    >
+                      <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
+                      <span className="text-xs text-zinc-600">{option.description}</span>
+                      {isActive ? <span className="text-xs font-medium text-emerald-600">Selected</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {supportsTextFontSelection && (
             <div className="space-y-3">
               {customFontPreviewCss ? <style>{customFontPreviewCss}</style> : null}
               <div className="flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-zinc-700">Select Font</label>
+                <label className="text-sm font-semibold text-zinc-700">
+                  {isDescribedPicturesMode ? "Caption Font" : "Select Font"}
+                </label>
                 <button
                   type="button"
                   onClick={handleBrowserFontUploadClick}
@@ -1003,9 +1107,15 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     {formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label)}
                   </p>
                 </div>
-                <p className="mt-3 text-2xl leading-snug text-zinc-800" style={{ fontFamily: selectedFullFactFont.previewFamily }}>
-                  {FULL_FACT_FONT_PREVIEW_TEXT}
-                </p>
+                <div
+                  className={`mt-3 text-2xl leading-snug text-zinc-800 ${isDescribedPicturesMode ? "rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3" : ""}`}
+                  style={{
+                    fontFamily: selectedFullFactFont.previewFamily,
+                    textAlign: isDescribedPicturesMode ? describedPictureTextAlignment : "left",
+                  }}
+                >
+                  {isDescribedPicturesMode ? "1970 Ford Torino Cobra" : FULL_FACT_FONT_PREVIEW_TEXT}
+                </div>
               </div>
               {loadingFonts || availableFonts.length === 0 ? (
                 <p className="text-xs text-zinc-500">
@@ -1094,7 +1204,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <textarea
               value={facts}
               onChange={(event) => setFacts(event.target.value)}
-              className="h-40 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+              className="h-44 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={mode === "full-fact"
                 ? "Paste facts here as JSON or one fact per line"
                 : `[
@@ -1107,12 +1217,18 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
         {needsList && (
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700">List Entries</label>
+            <label className="text-sm font-medium text-zinc-700">
+              {mode === "described-pictures" ? "Picture Descriptions" : "List Entries"}
+            </label>
             <textarea
               value={list}
               onChange={(event) => setList(event.target.value)}
               className="h-32 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-              placeholder="Paste data/list.json or provide one item per line"
+              placeholder={
+                mode === "described-pictures"
+                  ? 'One caption per line or JSON array, like ["1970 Ford Torino Cobra", "A sleepy koala hugging a eucalyptus branch"]'
+                  : "Paste data/list.json or provide one item per line"
+              }
             />
           </div>
         )}
@@ -1269,6 +1385,25 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
           sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
           className="object-cover object-left-top"
         />
+      </div>
+    );
+  }
+
+  if (mode === "described-pictures") {
+    return (
+      <div
+        aria-hidden="true"
+        className="relative aspect-[4/3] overflow-hidden rounded-t-2xl bg-gradient-to-br from-stone-200 via-neutral-100 to-zinc-200"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.65),_transparent_55%)]" />
+        <p className="absolute inset-x-0 top-[42%] text-center font-serif text-sm italic text-stone-500">
+          Add imagery to ./images/
+        </p>
+        <div className="absolute inset-x-0 bottom-5 flex justify-center px-5">
+          <div className="rounded-2xl border border-stone-300/80 bg-white/90 px-4 py-3 text-center text-sm font-medium text-stone-800 shadow-sm">
+            1970 Ford Torino Cobra
+          </div>
+        </div>
       </div>
     );
   }

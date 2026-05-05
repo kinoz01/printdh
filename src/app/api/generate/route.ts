@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { generateBook } from "@/lib/book/generator";
+import { NUMBER_BADGE_COLOR_VALUES } from "@/lib/book/number-badge-colors";
 
 const schema = z.object({
   mode: z.enum([
@@ -9,6 +10,7 @@ const schema = z.object({
     "list",
     "list-description",
     "list-description-even",
+    "described-pictures",
     "image-only",
     "full-fact",
     "dictionary",
@@ -18,6 +20,8 @@ const schema = z.object({
   listDescription: z.string().optional(),
   imageLibrary: z.string().optional(),
   overlayOpacity: z.number().optional(),
+  numberBadgeColor: z.enum(NUMBER_BADGE_COLOR_VALUES).optional(),
+  describedPictureTextAlignment: z.enum(["left", "center"]).optional(),
   factsPerPage: z.number().int().positive().optional(),
   fullFactBoxFontId: z.string().min(1).optional(),
   fullFactUploadedFont: z

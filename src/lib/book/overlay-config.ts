@@ -12,6 +12,9 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   verticalPadding: 0.2 * 72,
   minHeight: 0.5 * 72,
   maxHeight: PAGE_HEIGHT * 0.32,
+  fitContentWidth: false,
+  contentWidthMin: 2.2 * 72,
+  contentWidthMaxLines: 3,
   opacity: 0.9,
   roundness: 16,
   titleStyle: TITLE_STYLE,
@@ -45,6 +48,7 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   drawOverlayBox: true,
   repeatEntries: false,
   centerVertically: false,
+  centerHorizontally: false,
   centerTextVertically: true,
   textOffsetTop: 0,
 };
