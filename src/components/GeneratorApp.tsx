@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
 import {
@@ -55,7 +56,7 @@ const MODES = [
   },
   {
     value: "fully-described-images",
-    label: "Fully Described Images",
+    label: "Fully Described Pictures",
     description: "A left-aligned title and description sit together inside each image caption box.",
     accent: "from-amber-200 via-orange-100 to-stone-100",
   },
@@ -91,6 +92,16 @@ type ModeValue =
   | "image-only"
   | "full-fact"
   | "dictionary";
+
+const DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH = 6.2;
+const DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH = 7;
+
+function getDefaultDescribedPictureMaxBoxWidth(mode: ModeValue) {
+  return mode === "fully-described-images"
+    ? DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH
+    : DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH;
+}
+
 const PAGE_SIZES = [
   { value: "square", label: "Square", description: "8.64 × 8.76 in" },
   { value: "us-letter", label: "US Letter", description: "8.625 × 11.25 in" },
@@ -300,163 +311,163 @@ const DESCRIBED_PICTURES_PLACEHOLDER = `[
 const FULLY_DESCRIBED_IMAGES_PLACEHOLDER = `[
   {
     "title": "Espresso 🇮🇹",
-    "description": "Made by forcing hot water through finely ground coffee under high pressure to create a small, strong shot with crema."
+    "description": "Hot water is pushed through finely ground coffee under pressure, creating a small, bold shot with a golden crema."
   },
   {
     "title": "Americano 🇮🇹",
-    "description": "Made by adding hot water to one or two shots of espresso for a lighter, longer black coffee."
+    "description": "A shot of espresso is stretched with hot water, giving it a smoother taste while keeping the espresso character."
   },
   {
     "title": "Cappuccino 🇮🇹",
-    "description": "Made with espresso, steamed milk, and thick milk foam in balanced layers."
+    "description": "Espresso is topped with steamed milk and a thick layer of foam for a creamy coffee with a light finish."
   },
   {
     "title": "Latte 🇮🇹",
-    "description": "Made by mixing espresso with plenty of steamed milk and a thin layer of foam."
+    "description": "Espresso blends with plenty of warm steamed milk, creating a soft and mellow coffee drink."
   },
   {
     "title": "Flat White 🇦🇺",
-    "description": "Made with espresso and smooth microfoam milk, giving it a creamy texture and strong coffee flavor."
+    "description": "A strong espresso base is covered with silky microfoam, giving a smooth texture and rich coffee taste."
   },
   {
     "title": "Macchiato 🇮🇹",
-    "description": "Made by topping a shot of espresso with a small amount of milk foam."
+    "description": "A sharp espresso shot is finished with just a small touch of milk foam on top."
   },
   {
     "title": "Mocha 🇮🇹",
-    "description": "Made by combining espresso, chocolate, steamed milk, and foam or whipped cream."
+    "description": "Espresso, chocolate, and steamed milk come together for a warm coffee drink with a sweet cocoa flavor."
   },
   {
     "title": "Cortado 🇪🇸",
-    "description": "Made by mixing espresso with an equal amount of warm milk to soften the strong coffee taste."
+    "description": "Espresso is softened with an equal amount of warm milk, keeping the drink small, smooth, and balanced."
   },
   {
     "title": "Ristretto 🇮🇹",
-    "description": "Made like espresso but with less water, creating a shorter, richer, and more concentrated shot."
+    "description": "This shorter espresso uses less water, giving a thicker, sweeter, and more intense coffee shot."
   },
   {
     "title": "Lungo 🇮🇹",
-    "description": "Made by pulling an espresso shot with more water for a longer and slightly lighter coffee."
+    "description": "An espresso shot is pulled longer with extra water, creating a larger cup with a lighter but deeper taste."
   },
   {
     "title": "Turkish Coffee 🇹🇷",
-    "description": "Made by slowly heating very finely ground coffee with water in a cezve until it becomes foamy."
+    "description": "Very fine coffee is slowly heated with water in a cezve until a rich foam rises to the top."
   },
   {
     "title": "Arabic Coffee 🇸🇦",
-    "description": "Made by boiling light-roast coffee with cardamom and serving it in small cups."
+    "description": "Light-roast coffee is gently boiled with cardamom, then served in small cups with a fragrant taste."
   },
   {
     "title": "Moroccan Spiced Coffee 🇲🇦",
-    "description": "Made by brewing coffee with warm spices such as cinnamon, cardamom, nutmeg, and ginger."
+    "description": "Coffee is brewed with spices like cinnamon, cardamom, ginger, and nutmeg for a warm aromatic flavor."
   },
   {
     "title": "Vietnamese Iced Coffee 🇻🇳",
-    "description": "Made by dripping strong coffee over sweetened condensed milk and serving it over ice."
+    "description": "Strong coffee drips slowly over sweetened condensed milk, then gets poured over ice for a rich cold drink."
   },
   {
     "title": "Vietnamese Egg Coffee 🇻🇳",
-    "description": "Made by topping strong coffee with a whipped mixture of egg yolk and sweetened condensed milk."
+    "description": "Strong coffee is topped with whipped egg yolk and condensed milk, creating a creamy dessert-like cup."
   },
   {
-    "title": "Café au Lait 🇫🇷",
-    "description": "Made by mixing strong brewed coffee with hot milk in equal or near-equal parts."
+    "title": "Cafe au Lait 🇫🇷",
+    "description": "Strong brewed coffee is mixed with hot milk for a simple, smooth, and comforting French-style drink."
   },
   {
-    "title": "Café de Olla 🇲🇽",
-    "description": "Made by simmering coffee with cinnamon and piloncillo or brown sugar in a clay pot."
+    "title": "Cafe de Olla 🇲🇽",
+    "description": "Coffee is simmered with cinnamon and piloncillo or brown sugar, often in a clay pot for a rustic taste."
   },
   {
     "title": "Cuban Coffee 🇨🇺",
-    "description": "Made by brewing strong espresso and whipping the first drops with sugar to create a sweet foam."
+    "description": "Strong espresso is mixed with whipped sugar foam, giving it a bold body and sweet creamy top."
   },
   {
-    "title": "Café Bombón 🇪🇸",
-    "description": "Made by layering espresso over sweetened condensed milk in a small glass."
+    "title": "Cafe Bombon 🇪🇸",
+    "description": "Espresso is poured over sweetened condensed milk, forming beautiful layers in a small glass."
   },
   {
     "title": "Irish Coffee 🇮🇪",
-    "description": "Made by mixing hot coffee with sugar and Irish whiskey, then topping it with cream."
+    "description": "Hot coffee is mixed with sugar and Irish whiskey, then finished with a soft layer of cream."
   },
   {
     "title": "Affogato 🇮🇹",
-    "description": "Made by pouring a hot shot of espresso over vanilla gelato or ice cream."
+    "description": "A hot espresso shot is poured over vanilla ice cream or gelato, melting it into a simple coffee dessert."
   },
   {
     "title": "Moka Pot Coffee 🇮🇹",
-    "description": "Made by brewing ground coffee with steam pressure in a stovetop moka pot."
+    "description": "Ground coffee brews on the stove as steam pressure pushes water upward through a moka pot."
   },
   {
     "title": "French Press Coffee 🇫🇷",
-    "description": "Made by steeping coarse coffee grounds in hot water, then pressing them through a metal filter."
+    "description": "Coarse coffee grounds steep in hot water before being pressed down with a metal filter for a full-bodied cup."
   },
   {
     "title": "Pour Over Coffee 🇯🇵",
-    "description": "Made by slowly pouring hot water over ground coffee in a paper filter and letting it drip into a cup."
+    "description": "Hot water is poured slowly over ground coffee in a filter, giving a clean cup with delicate flavor."
   },
   {
     "title": "Cold Brew 🇳🇱",
-    "description": "Made by steeping coarse coffee grounds in cold water for several hours, then straining and serving chilled."
+    "description": "Coarse coffee grounds steep in cold water for many hours, creating a smooth drink with low bitterness."
   },
   {
     "title": "Nitro Cold Brew 🇺🇸",
-    "description": "Made by infusing cold brew coffee with nitrogen gas to create a creamy texture and foamy top."
+    "description": "Cold brew is infused with nitrogen, giving it a creamy texture and a foamy top without adding milk."
   },
   {
-    "title": "Greek Frappé 🇬🇷",
-    "description": "Made by shaking instant coffee, sugar, and water into foam, then serving it with ice."
+    "title": "Greek Frappe 🇬🇷",
+    "description": "Instant coffee, sugar, and a little water are shaken into foam, then served cold with ice."
   },
   {
     "title": "Dalgona Coffee 🇰🇷",
-    "description": "Made by whipping instant coffee, sugar, and hot water, then spooning it over milk."
+    "description": "Instant coffee, sugar, and hot water are whipped into a thick cream and spooned over milk."
   },
   {
     "title": "Ethiopian Coffee 🇪🇹",
-    "description": "Made by brewing freshly roasted and ground coffee in a traditional jebena pot."
+    "description": "Freshly roasted coffee is brewed slowly in a jebena pot and served in small cups with a deep aroma."
   },
   {
     "title": "South Indian Filter Coffee 🇮🇳",
-    "description": "Made by mixing strong coffee decoction from a metal filter with hot milk and sugar."
+    "description": "A strong coffee decoction from a metal filter is mixed with hot milk and sugar, then poured until frothy."
   },
   {
     "title": "Kopi Tubruk 🇮🇩",
-    "description": "Made by pouring hot water directly over ground coffee and letting the grounds settle before drinking."
+    "description": "Ground coffee and hot water are stirred directly in the cup, then left to settle before drinking."
   },
   {
     "title": "Kopi Susu 🇮🇩",
-    "description": "Made by mixing strong coffee with sweetened condensed milk and serving it hot or iced."
+    "description": "Strong coffee is mixed with sweetened condensed milk for a sweet, creamy drink served hot or iced."
   },
   {
     "title": "Kopi Luwak 🇮🇩",
-    "description": "Made by brewing specially processed Indonesian coffee beans, usually served black to highlight their smooth flavor."
+    "description": "These specially processed Indonesian beans are usually brewed simply and served black to highlight their smooth taste."
   },
   {
-    "title": "Pharisäer Coffee 🇩🇪",
-    "description": "Made by mixing strong coffee with rum and sugar, then topping it with whipped cream."
+    "title": "Pharisaer Coffee 🇩🇪",
+    "description": "Strong coffee is combined with rum and sugar, then covered with whipped cream instead of being stirred."
   },
   {
     "title": "Mazagran 🇵🇹",
-    "description": "Made by serving strong coffee over ice, often with sugar and lemon for a refreshing taste."
+    "description": "Strong coffee is cooled over ice and often brightened with sugar and lemon for a refreshing drink."
   },
   {
     "title": "Cafezinho 🇧🇷",
-    "description": "Made by brewing finely ground coffee with sugar and serving it strong in small cups."
+    "description": "Finely ground coffee is brewed with sugar and served strong in small cups as a quick Brazilian favorite."
   },
   {
-    "title": "Café Touba 🇸🇳",
-    "description": "Made by brewing coffee roasted with grains of Selim or cloves for a spicy aromatic flavor."
+    "title": "Cafe Touba 🇸🇳",
+    "description": "Coffee roasted with grains of Selim or cloves is brewed into a spicy and fragrant Senegalese drink."
   },
   {
     "title": "Qahwa 🇦🇪",
-    "description": "Made by simmering light-roast coffee with cardamom, sometimes saffron or cloves, and serving it in small cups."
+    "description": "Light-roast coffee is simmered with cardamom, and sometimes saffron or cloves, then served in tiny cups."
   },
   {
     "title": "Red Eye Coffee 🇺🇸",
-    "description": "Made by adding a shot of espresso to a cup of regular brewed coffee."
+    "description": "Regular brewed coffee gets an espresso shot added to it for extra strength and a stronger caffeine kick."
   },
   {
     "title": "Breve 🇺🇸",
-    "description": "Made by combining espresso with steamed half-and-half for a rich and creamy coffee drink."
+    "description": "Espresso is blended with steamed half-and-half, making the drink thicker, richer, and creamier than a latte."
   }
 ]`;
 
@@ -473,7 +484,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
     useState<DescribedPictureTextAlignment>("center");
-  const [describedPictureMaxBoxWidth, setDescribedPictureMaxBoxWidth] = useState(6.2);
+  const [describedPictureMaxBoxWidth, setDescribedPictureMaxBoxWidth] = useState(
+    getDefaultDescribedPictureMaxBoxWidth("full-fact")
+  );
   const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
   const [factsPerPage, setFactsPerPage] = useState(4);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
@@ -511,14 +524,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const fullFactFontVariantInputRef = useRef<HTMLInputElement | null>(null);
   const fullyDescribedTitleFontSourceInputRef = useRef<HTMLInputElement | null>(null);
   const fullyDescribedTitleFontVariantInputRef = useRef<HTMLInputElement | null>(null);
-
-  const syncStepFromLocation = useCallback(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    const params = new URLSearchParams(window.location.search);
-    setStep(parseWizardStep(params.get("step")));
-  }, []);
+  const searchParams = useSearchParams();
 
   const navigateToStep = useCallback((nextStep: WizardStep) => {
     if (typeof window === "undefined") {
@@ -537,13 +543,20 @@ export function GeneratorApp(props: GeneratorAppProps) {
     setStep(nextStep);
   }, []);
 
+  const handleModeSelect = useCallback((nextMode: ModeValue) => {
+    setMode(nextMode);
+    if (
+      nextMode === "described-pictures" ||
+      nextMode === "even-described-pictures" ||
+      nextMode === "fully-described-images"
+    ) {
+      setDescribedPictureMaxBoxWidth(getDefaultDescribedPictureMaxBoxWidth(nextMode));
+    }
+  }, []);
+
   useEffect(() => {
-    syncStepFromLocation();
-    window.addEventListener("popstate", syncStepFromLocation);
-    return () => {
-      window.removeEventListener("popstate", syncStepFromLocation);
-    };
-  }, [syncStepFromLocation]);
+    setStep(parseWizardStep(searchParams.get("step")));
+  }, [searchParams]);
 
   const loadBrowserStoredFonts = useCallback(async () => {
     const fonts = await listBrowserFonts();
@@ -1136,7 +1149,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
     const safeDescribedPictureMaxBoxWidth = Number.isFinite(describedPictureMaxBoxWidth)
       ? Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
-      : 6.2;
+      : getDefaultDescribedPictureMaxBoxWidth(mode);
     const base: Record<string, unknown> = {
       mode,
       imageLibrary,
@@ -1261,7 +1274,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <button
                   key={item.value}
                   type="button"
-                  onClick={() => setMode(item.value)}
+                  onClick={() => handleModeSelect(item.value)}
                   aria-pressed={isActive}
                   className={`flex h-full flex-col rounded-2xl border bg-white text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
                     isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
@@ -1418,7 +1431,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   value={describedPictureMaxBoxWidth}
                   onChange={(event) => {
                     const next = Number(event.target.value);
-                    setDescribedPictureMaxBoxWidth(Number.isFinite(next) ? next : 6.2);
+                    setDescribedPictureMaxBoxWidth(
+                      Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
+                    );
                   }}
                   className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
                 />
@@ -2269,21 +2284,12 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
     return (
       <div aria-hidden="true" className="relative aspect-[1338/668] overflow-hidden rounded-t-2xl bg-zinc-100">
         <Image
-          src="/described-images.webp"
-          alt="Fully Described Images preview"
+          src="/fully-described-images.webp"
+          alt="Fully Described Pictures preview"
           fill
           sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
           className="object-cover object-center"
         />
-        <div className="absolute inset-x-0 bottom-5 flex justify-center px-5">
-          <div className="w-full max-w-[72%] rounded-2xl border border-stone-300/80 bg-white/92 px-4 py-3 shadow-sm">
-            <p className="text-left text-sm font-semibold text-stone-900">Espresso</p>
-            <p className="mt-1 text-left text-xs leading-snug text-stone-700">
-              Made by forcing hot water through finely ground coffee under high pressure to create a small, strong shot
-              with crema.
-            </p>
-          </div>
-        </div>
       </div>
     );
   }

@@ -8,7 +8,9 @@ import {
 } from "./constants";
 import { loadImageAssets } from "./assets";
 import { createOverlayConfig } from "./overlay-config";
+import { resolveEmojiInlineAsset, type InlineImageAsset } from "./emoji-inline-assets";
 import { readBookFont } from "./font-library";
+import { loadUnicodeFallbackFont, parseFontData } from "./font-support";
 import { OverlayConfig, StandardFontName, TextEntry } from "./types";
 import { drawParagraphs, estimateStoryHeight, layoutText, layoutTextWithFont, ParagraphLayout } from "./text-layout";
 import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
@@ -73,7 +75,9 @@ export async function renderFullFactBook(options: FullFactOptions) {
     }
     return fontCache.get(font)!;
   };
+  const unicodeFallbackFont = await loadUnicodeFallbackFont(pdf);
   let customBoxTextFont: PDFFont | null = null;
+  let customBoxTextFontData: ReturnType<typeof parseFontData> = null;
   if (boxTextFontBytes || boxTextFontId) {
     const selectedBytes =
       boxTextFontBytes ??
@@ -82,8 +86,20 @@ export async function renderFullFactBook(options: FullFactOptions) {
       throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
     }
     pdf.registerFontkit(fontkit);
+    customBoxTextFontData = parseFontData(selectedBytes);
     customBoxTextFont = await pdf.embedFont(selectedBytes, { subset: true });
   }
+  const inlineImageCache = new Map<string, Promise<PDFImage>>();
+  const embedInlineImage = async (asset: InlineImageAsset) => {
+    const cached = inlineImageCache.get(asset.key);
+    if (cached) {
+      return cached;
+    }
+    const pending =
+      asset.mimeType === "image/png" ? pdf.embedPng(asset.bytes) : pdf.embedJpg(asset.bytes);
+    inlineImageCache.set(asset.key, pending);
+    return pending;
+  };
 
   const assets = await loadImageAssets(imageLibrary);
   const embeddedImages: PDFImage[] = [];
@@ -97,7 +113,19 @@ export async function renderFullFactBook(options: FullFactOptions) {
     const page = pdf.addPage([pageWidth, pageHeight]);
     drawImageBackground(page, embeddedImages, assets, pageIndex, pageWidth, pageHeight);
     if (pageIndex % 2 === 1 && chunkIndex < chunks.length) {
-      await drawFactStack(page, chunks[chunkIndex], cardOverlayConfig, getFont, customBoxTextFont, pageWidth, pageHeight);
+      await drawFactStack(
+        page,
+        chunks[chunkIndex],
+        cardOverlayConfig,
+        getFont,
+        customBoxTextFont,
+        customBoxTextFontData,
+        unicodeFallbackFont?.pdfFont ?? null,
+        unicodeFallbackFont?.fontData ?? null,
+        embedInlineImage,
+        pageWidth,
+        pageHeight
+      );
       chunkIndex++;
     }
   }
@@ -150,6 +178,10 @@ async function drawFactStack(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>,
+  embedInlineImage: (asset: InlineImageAsset) => Promise<PDFImage>,
   pageWidth: number,
   pageHeight: number
 ) {
@@ -169,7 +201,16 @@ async function drawFactStack(
 
   const prepared: Array<{ entry: TextEntry; story: ParagraphLayout[]; height: number }> = [];
   for (const entry of entries) {
-    const story = await buildFactCardStory(entry, config, getFont, textWidth, customBoxTextFont);
+    const story = await buildFactCardStory(
+      entry,
+      config,
+      getFont,
+      textWidth,
+      customBoxTextFont,
+      customBoxTextFontData,
+      unicodeFallbackFont,
+      unicodeFallbackFontData
+    );
     const estimated = estimateStoryHeight(story);
     const cardHeight = Math.max(
       config.minHeight,
@@ -190,7 +231,7 @@ async function drawFactStack(
   let cursorY = stackBottom + totalHeight;
   for (const card of prepared) {
     cursorY -= card.height;
-    drawCard(
+    await drawCard(
       page,
       card.entry,
       card.story,
@@ -199,7 +240,8 @@ async function drawFactStack(
       cardWidth,
       card.height,
       config,
-      getFont
+      getFont,
+      embedInlineImage
     );
     cursorY -= gap;
   }
@@ -210,22 +252,51 @@ async function buildFactCardStory(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   maxWidth: number,
-  customBoxTextFont: PDFFont | null
+  customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>
 ) {
   const story: ParagraphLayout[] = [];
   if (entry.title && config.titleStyle) {
     if (customBoxTextFont) {
-      story.push(...layoutTextWithFont(entry.title, config.titleStyle, customBoxTextFont, maxWidth));
+      story.push(
+        ...(await layoutTextWithFont(entry.title, config.titleStyle, customBoxTextFont, maxWidth, undefined, {
+          primaryFontData: customBoxTextFontData,
+          fallbackFont: unicodeFallbackFont,
+          fallbackFontData: unicodeFallbackFontData,
+          emojiAssetResolver: resolveEmojiInlineAsset,
+        }))
+      );
     } else {
-      story.push(...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth)));
+      story.push(
+        ...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth, undefined, {
+          fallbackFont: unicodeFallbackFont,
+          fallbackFontData: unicodeFallbackFontData,
+          emojiAssetResolver: resolveEmojiInlineAsset,
+        }))
+      );
     }
   }
 
   const body = entry.body || "Share your fact here.";
   if (customBoxTextFont) {
-    story.push(...layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth));
+    story.push(
+      ...(await layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth, undefined, {
+        primaryFontData: customBoxTextFontData,
+        fallbackFont: unicodeFallbackFont,
+        fallbackFontData: unicodeFallbackFontData,
+        emojiAssetResolver: resolveEmojiInlineAsset,
+      }))
+    );
   } else {
-    story.push(...(await layoutText(body, config.bodyStyle, getFont, maxWidth)));
+    story.push(
+      ...(await layoutText(body, config.bodyStyle, getFont, maxWidth, undefined, {
+        fallbackFont: unicodeFallbackFont,
+        fallbackFontData: unicodeFallbackFontData,
+        emojiAssetResolver: resolveEmojiInlineAsset,
+      }))
+    );
   }
   return story;
 }
@@ -239,7 +310,8 @@ async function drawCard(
   width: number,
   height: number,
   config: OverlayConfig,
-  getFont: (font: StandardFontName) => Promise<PDFFont>
+  getFont: (font: StandardFontName) => Promise<PDFFont>,
+  embedInlineImage: (asset: InlineImageAsset) => Promise<PDFImage>
 ) {
   drawRoundedRectangle(page, {
     x,
@@ -256,13 +328,14 @@ async function drawCard(
   let cursorY = y + height - config.verticalPadding;
   let isFirstParagraph = true;
   for (const paragraph of story) {
-    cursorY = drawParagraphs(
+    cursorY = await drawParagraphs(
       page,
       paragraph,
       x + config.horizontalPadding,
       cursorY,
       width - 2 * config.horizontalPadding,
-      isFirstParagraph
+      isFirstParagraph,
+      embedInlineImage
     );
     if (paragraph.lines.length > 0) {
       isFirstParagraph = false;

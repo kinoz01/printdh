@@ -1,7 +1,9 @@
 import { promises as fs } from "fs";
 import path from "path";
 import Link from "next/link";
+import { Suspense } from "react";
 import { GeneratorApp } from "@/components/GeneratorApp";
+import { HomeButton } from "@/components/HomeButton";
 
 const DATA_DIR = path.resolve(process.cwd(), "..", "data");
 
@@ -24,8 +26,11 @@ export default async function HomePage() {
   return (
     <main className="min-h-screen bg-zinc-50 py-12">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4">
-        <header className="relative flex flex-col items-center gap-3 text-center">
-          <div className="flex w-full justify-end gap-2 sm:absolute sm:right-0 sm:top-0 sm:w-auto">
+        <header className="relative flex flex-col items-center gap-3 text-center sm:min-h-[44px] sm:justify-center">
+          <div className="flex w-full justify-start sm:absolute sm:left-0 sm:top-1/2 sm:w-auto sm:-translate-y-1/2">
+            <HomeButton />
+          </div>
+          <div className="flex w-full justify-end gap-2 sm:absolute sm:right-0 sm:top-1/2 sm:w-auto sm:-translate-y-1/2">
             <Link
               href="/metadata"
               className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
@@ -43,12 +48,14 @@ export default async function HomePage() {
             Picture Book Studio
           </p>
         </header>
-        <GeneratorApp
-          initialFacts={facts}
-          initialList={list}
-          initialListDescription={listDescription}
-          defaultImageLibrary="../images"
-        />
+        <Suspense fallback={null}>
+          <GeneratorApp
+            initialFacts={facts}
+            initialList={list}
+            initialListDescription={listDescription}
+            defaultImageLibrary="../images"
+          />
+        </Suspense>
       </div>
     </main>
   );

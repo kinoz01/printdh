@@ -2,7 +2,9 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { DEFAULT_IMAGE_LIBRARY, PAGE_HEIGHT, PAGE_WIDTH, TOTAL_PAGES } from "./constants";
 import { createOverlayConfig } from "./overlay-config";
+import { resolveEmojiInlineAsset, type InlineImageAsset } from "./emoji-inline-assets";
 import { readBookFont } from "./font-library";
+import { loadUnicodeFallbackFont, parseFontData } from "./font-support";
 import type { OverlayConfig, TextEntry } from "./types";
 import { StandardFontName } from "./types";
 import { loadImageAssets } from "./assets";
@@ -55,8 +57,11 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
     return fontCache.get(font)!;
   };
+  const unicodeFallbackFont = await loadUnicodeFallbackFont(pdf);
   let customBoxTitleFont: PDFFont | null = null;
+  let customBoxTitleFontData: ReturnType<typeof parseFontData> = null;
   let customBoxTextFont: PDFFont | null = null;
+  let customBoxTextFontData: ReturnType<typeof parseFontData> = null;
   if (boxTitleFontBytes || boxTitleFontId || boxTextFontBytes || boxTextFontId) {
     pdf.registerFontkit(fontkit);
   }
@@ -67,6 +72,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     if (!selectedBytes) {
       throw new Error(`Selected title font "${boxTitleFontId}" was not found in ./fonts.`);
     }
+    customBoxTitleFontData = parseFontData(selectedBytes);
     customBoxTitleFont = await pdf.embedFont(selectedBytes, { subset: true });
   }
   if (boxTextFontBytes || boxTextFontId) {
@@ -76,8 +82,20 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     if (!selectedBytes) {
       throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
     }
+    customBoxTextFontData = parseFontData(selectedBytes);
     customBoxTextFont = await pdf.embedFont(selectedBytes, { subset: true });
   }
+  const inlineImageCache = new Map<string, Promise<PDFImage>>();
+  const embedInlineImage = async (asset: InlineImageAsset) => {
+    const cached = inlineImageCache.get(asset.key);
+    if (cached) {
+      return cached;
+    }
+    const pending =
+      asset.mimeType === "image/png" ? pdf.embedPng(asset.bytes) : pdf.embedJpg(asset.bytes);
+    inlineImageCache.set(asset.key, pending);
+    return pending;
+  };
 
   const imageAssets = await loadImageAssets(imageLibrary);
   const embeddedImages: PDFImage[] = [];
@@ -113,7 +131,12 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
         overlayConfig,
         getFont,
         customBoxTitleFont,
+        customBoxTitleFontData,
         customBoxTextFont,
+        customBoxTextFontData,
+        unicodeFallbackFont?.pdfFont ?? null,
+        unicodeFallbackFont?.fontData ?? null,
+        embedInlineImage,
         pageWidth,
         pageHeight
       );
@@ -245,7 +268,12 @@ async function drawOverlay(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   customBoxTitleFont: PDFFont | null,
+  customBoxTitleFontData: ReturnType<typeof parseFontData>,
   customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>,
+  embedInlineImage: (asset: InlineImageAsset) => Promise<PDFImage>,
   pageWidth: number,
   pageHeight: number
 ) {
@@ -260,11 +288,26 @@ async function drawOverlay(
     config,
     getFont,
     customBoxTitleFont,
+    customBoxTitleFontData,
     customBoxTextFont,
+    customBoxTextFontData,
+    unicodeFallbackFont,
+    unicodeFallbackFontData,
     maxTextWidth
   );
   const textWidth = resolvedTextWidth ?? maxTextWidth;
-  const story = await buildOverlayStory(entry, config, getFont, textWidth, customBoxTitleFont, customBoxTextFont);
+  const story = await buildOverlayStory(
+    entry,
+    config,
+    getFont,
+    textWidth,
+    customBoxTitleFont,
+    customBoxTitleFontData,
+    customBoxTextFont,
+    customBoxTextFontData,
+    unicodeFallbackFont,
+    unicodeFallbackFontData
+  );
   if (!story.length) {
     return;
   }
@@ -315,7 +358,15 @@ async function drawOverlay(
   let cursorY = yStart;
   let isFirstParagraph = true;
   for (const paragraph of story) {
-    cursorY = drawParagraphs(page, paragraph, overlayX + config.horizontalPadding, cursorY, textWidth, isFirstParagraph);
+    cursorY = await drawParagraphs(
+      page,
+      paragraph,
+      overlayX + config.horizontalPadding,
+      cursorY,
+      textWidth,
+      isFirstParagraph,
+      embedInlineImage
+    );
     if (paragraph.lines.length > 0) {
       isFirstParagraph = false;
     }
@@ -327,7 +378,11 @@ async function resolveTextWidth(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   customBoxTitleFont: PDFFont | null,
+  customBoxTitleFontData: ReturnType<typeof parseFontData>,
   customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>,
   maxTextWidth: number
 ) {
   const widestFit = await buildOverlayStory(
@@ -336,13 +391,28 @@ async function resolveTextWidth(
     getFont,
     maxTextWidth,
     customBoxTitleFont,
-    customBoxTextFont
+    customBoxTitleFontData,
+    customBoxTextFont,
+    customBoxTextFontData,
+    unicodeFallbackFont,
+    unicodeFallbackFontData
   );
   if (!widestFit.length) {
     return null;
   }
   if (config.fitContentWidth) {
-    return fitStoryWidth(entry, config, getFont, customBoxTitleFont, customBoxTextFont, maxTextWidth);
+    return fitStoryWidth(
+      entry,
+      config,
+      getFont,
+      customBoxTitleFont,
+      customBoxTitleFontData,
+      customBoxTextFont,
+      customBoxTextFontData,
+      unicodeFallbackFont,
+      unicodeFallbackFontData,
+      maxTextWidth
+    );
   }
   return detectSingleLineWidth(entry, widestFit, maxTextWidth, config);
 }
@@ -352,7 +422,11 @@ async function fitStoryWidth(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   customBoxTitleFont: PDFFont | null,
+  customBoxTitleFontData: ReturnType<typeof parseFontData>,
   customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>,
   maxTextWidth: number
 ) {
   const minimumWidth = Math.min(maxTextWidth, Math.max(20, config.contentWidthMin));
@@ -362,7 +436,11 @@ async function fitStoryWidth(
     getFont,
     maxTextWidth,
     customBoxTitleFont,
-    customBoxTextFont
+    customBoxTitleFontData,
+    customBoxTextFont,
+    customBoxTextFontData,
+    unicodeFallbackFont,
+    unicodeFallbackFontData
   );
   if (!story.length) {
     return null;
@@ -386,23 +464,54 @@ async function buildOverlayStory(
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   maxWidth: number,
   customBoxTitleFont: PDFFont | null,
-  customBoxTextFont: PDFFont | null
+  customBoxTitleFontData: ReturnType<typeof parseFontData>,
+  customBoxTextFont: PDFFont | null,
+  customBoxTextFontData: ReturnType<typeof parseFontData>,
+  unicodeFallbackFont: PDFFont | null,
+  unicodeFallbackFontData: ReturnType<typeof parseFontData>
 ) {
   const story: ParagraphLayout[] = [];
   if (entry.title && config.titleStyle) {
     const titleFont = customBoxTitleFont ?? customBoxTextFont;
+    const titleFontData = customBoxTitleFontData ?? customBoxTextFontData;
     if (titleFont) {
-      story.push(...layoutTextWithFont(entry.title, config.titleStyle, titleFont, maxWidth));
+      story.push(
+        ...(await layoutTextWithFont(entry.title, config.titleStyle, titleFont, maxWidth, undefined, {
+          primaryFontData: titleFontData,
+          fallbackFont: unicodeFallbackFont,
+          fallbackFontData: unicodeFallbackFontData,
+          emojiAssetResolver: resolveEmojiInlineAsset,
+        }))
+      );
     } else {
-      story.push(...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth)));
+      story.push(
+        ...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth, undefined, {
+          fallbackFont: unicodeFallbackFont,
+          fallbackFontData: unicodeFallbackFontData,
+          emojiAssetResolver: resolveEmojiInlineAsset,
+        }))
+      );
     }
   }
 
   const body = entry.body || "Share your fact here.";
   if (customBoxTextFont) {
-    story.push(...layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth));
+    story.push(
+      ...(await layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth, undefined, {
+        primaryFontData: customBoxTextFontData,
+        fallbackFont: unicodeFallbackFont,
+        fallbackFontData: unicodeFallbackFontData,
+        emojiAssetResolver: resolveEmojiInlineAsset,
+      }))
+    );
   } else {
-    story.push(...(await layoutText(body, config.bodyStyle, getFont, maxWidth)));
+    story.push(
+      ...(await layoutText(body, config.bodyStyle, getFont, maxWidth, undefined, {
+        fallbackFont: unicodeFallbackFont,
+        fallbackFontData: unicodeFallbackFontData,
+        emojiAssetResolver: resolveEmojiInlineAsset,
+      }))
+    );
   }
   return story;
 }
@@ -415,9 +524,8 @@ function measureWidestLine(story: ParagraphLayout[]) {
   let widest = 0;
   for (const paragraph of story) {
     for (const line of paragraph.lines) {
-      const width = paragraph.font.widthOfTextAtSize(line, paragraph.style.fontSize);
-      if (width > widest) {
-        widest = width;
+      if (line.width > widest) {
+        widest = line.width;
       }
     }
   }
@@ -437,11 +545,11 @@ function detectSingleLineWidth(
   if (paragraph.lines.length !== 1) {
     return null;
   }
-  const text = paragraph.lines[0];
-  if (!text) {
+  const line = paragraph.lines[0];
+  if (!line || line.width <= 0) {
     return null;
   }
-  const measured = paragraph.font.widthOfTextAtSize(text, paragraph.style.fontSize);
+  const measured = line.width;
   if (measured <= 0 || measured > maxWidth) {
     return null;
   }
