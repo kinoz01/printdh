@@ -15,6 +15,9 @@ export interface RenderBookOptions {
   placeholder: string;
   imageLibrary?: string;
   overlayOverrides?: Partial<OverlayConfig>;
+  skipOverlayPageIndexes?: number[];
+  boxTitleFontId?: string;
+  boxTitleFontBytes?: Uint8Array;
   boxTextFontId?: string;
   boxTextFontBytes?: Uint8Array;
   pageWidth?: number;
@@ -28,6 +31,9 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     placeholder,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
     overlayOverrides,
+    skipOverlayPageIndexes = [],
+    boxTitleFontId,
+    boxTitleFontBytes,
     boxTextFontId,
     boxTextFontBytes,
     pageWidth = PAGE_WIDTH,
@@ -35,7 +41,10 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     totalPages = TOTAL_PAGES,
   } = options;
   const overlayConfig = createOverlayConfig(overlayOverrides);
-  const overlaysNeeded = countOverlays(overlayConfig, totalPages);
+  const skipOverlayPages = new Set(
+    skipOverlayPageIndexes.filter((index) => Number.isInteger(index) && index >= 0 && index < totalPages)
+  );
+  const overlaysNeeded = countOverlays(overlayConfig, totalPages, skipOverlayPages);
   const preparedEntries = prepareEntries(entries, overlaysNeeded, placeholder, overlayConfig.repeatEntries);
 
   const pdf = await PDFDocument.create();
@@ -46,7 +55,20 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
     return fontCache.get(font)!;
   };
+  let customBoxTitleFont: PDFFont | null = null;
   let customBoxTextFont: PDFFont | null = null;
+  if (boxTitleFontBytes || boxTitleFontId || boxTextFontBytes || boxTextFontId) {
+    pdf.registerFontkit(fontkit);
+  }
+  if (boxTitleFontBytes || boxTitleFontId) {
+    const selectedBytes =
+      boxTitleFontBytes ??
+      (boxTitleFontId ? (await readBookFont(boxTitleFontId))?.bytes ?? null : null);
+    if (!selectedBytes) {
+      throw new Error(`Selected title font "${boxTitleFontId}" was not found in ./fonts.`);
+    }
+    customBoxTitleFont = await pdf.embedFont(selectedBytes, { subset: true });
+  }
   if (boxTextFontBytes || boxTextFontId) {
     const selectedBytes =
       boxTextFontBytes ??
@@ -54,7 +76,6 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     if (!selectedBytes) {
       throw new Error(`Selected font "${boxTextFontId}" was not found in ./fonts.`);
     }
-    pdf.registerFontkit(fontkit);
     customBoxTextFont = await pdf.embedFont(selectedBytes, { subset: true });
   }
 
@@ -72,7 +93,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     const page = pdf.addPage([pageWidth, pageHeight]);
     const evenPage = pageIndex % 2 === 1;
     const showImage = evenPage ? overlayConfig.showImageOnEven : overlayConfig.showImageOnOdd;
-    const entry = shouldPlaceOverlay(pageIndex, overlayConfig) ? preparedEntries[entryIndex++] : null;
+    const entry = shouldPlaceOverlay(pageIndex, overlayConfig, skipOverlayPages) ? preparedEntries[entryIndex++] : null;
     drawPageBackground(page, entry, overlayConfig, showImage, pageWidth, pageHeight);
 
     if (showImage) {
@@ -86,17 +107,26 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
 
     if (entry) {
-      await drawOverlay(page, entry, overlayConfig, getFont, customBoxTextFont, pageWidth, pageHeight);
+      await drawOverlay(
+        page,
+        entry,
+        overlayConfig,
+        getFont,
+        customBoxTitleFont,
+        customBoxTextFont,
+        pageWidth,
+        pageHeight
+      );
     }
   }
 
   return pdf.save();
 }
 
-function countOverlays(config: OverlayConfig, totalPages: number) {
+function countOverlays(config: OverlayConfig, totalPages: number, skipOverlayPages: Set<number>) {
   let overlays = 0;
   for (let pageIndex = 0; pageIndex < totalPages; pageIndex++) {
-    if (shouldPlaceOverlay(pageIndex, config)) {
+    if (shouldPlaceOverlay(pageIndex, config, skipOverlayPages)) {
       overlays++;
     }
   }
@@ -126,7 +156,10 @@ function prepareEntries(
   return prepared.map((entry, index) => ({ ...entry, number: index + 1 }));
 }
 
-function shouldPlaceOverlay(pageIndex: number, config: OverlayConfig) {
+function shouldPlaceOverlay(pageIndex: number, config: OverlayConfig, skipOverlayPages: Set<number> = new Set()) {
+  if (skipOverlayPages.has(pageIndex)) {
+    return false;
+  }
   if (config.showOnEven && pageIndex % 2 === 1) {
     return true;
   }
@@ -211,6 +244,7 @@ async function drawOverlay(
   entry: TextEntry,
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTitleFont: PDFFont | null,
   customBoxTextFont: PDFFont | null,
   pageWidth: number,
   pageHeight: number
@@ -221,9 +255,16 @@ async function drawOverlay(
   const baseOverlayWidth = pageWidth - config.marginLeft - config.marginRight;
   const maxOverlayWidth = config.maxBoxWidth ? Math.min(baseOverlayWidth, Math.max(40, config.maxBoxWidth)) : baseOverlayWidth;
   const maxTextWidth = Math.max(20, maxOverlayWidth - config.horizontalPadding * 2);
-  const resolvedTextWidth = await resolveTextWidth(entry, config, getFont, customBoxTextFont, maxTextWidth);
+  const resolvedTextWidth = await resolveTextWidth(
+    entry,
+    config,
+    getFont,
+    customBoxTitleFont,
+    customBoxTextFont,
+    maxTextWidth
+  );
   const textWidth = resolvedTextWidth ?? maxTextWidth;
-  const story = await buildOverlayStory(entry, config, getFont, textWidth, customBoxTextFont);
+  const story = await buildOverlayStory(entry, config, getFont, textWidth, customBoxTitleFont, customBoxTextFont);
   if (!story.length) {
     return;
   }
@@ -285,15 +326,23 @@ async function resolveTextWidth(
   entry: TextEntry,
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTitleFont: PDFFont | null,
   customBoxTextFont: PDFFont | null,
   maxTextWidth: number
 ) {
-  const widestFit = await buildOverlayStory(entry, config, getFont, maxTextWidth, customBoxTextFont);
+  const widestFit = await buildOverlayStory(
+    entry,
+    config,
+    getFont,
+    maxTextWidth,
+    customBoxTitleFont,
+    customBoxTextFont
+  );
   if (!widestFit.length) {
     return null;
   }
   if (config.fitContentWidth) {
-    return fitStoryWidth(entry, config, getFont, customBoxTextFont, maxTextWidth);
+    return fitStoryWidth(entry, config, getFont, customBoxTitleFont, customBoxTextFont, maxTextWidth);
   }
   return detectSingleLineWidth(entry, widestFit, maxTextWidth, config);
 }
@@ -302,15 +351,23 @@ async function fitStoryWidth(
   entry: TextEntry,
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
+  customBoxTitleFont: PDFFont | null,
   customBoxTextFont: PDFFont | null,
   maxTextWidth: number
 ) {
   const minimumWidth = Math.min(maxTextWidth, Math.max(20, config.contentWidthMin));
-  const story = await buildOverlayStory(entry, config, getFont, maxTextWidth, customBoxTextFont);
+  const story = await buildOverlayStory(
+    entry,
+    config,
+    getFont,
+    maxTextWidth,
+    customBoxTitleFont,
+    customBoxTextFont
+  );
   if (!story.length) {
     return null;
   }
-  if (countStoryLines(story) > 1 || entry.title) {
+  if (countStoryLines(story) > Math.max(1, config.contentWidthMaxLines)) {
     return maxTextWidth;
   }
   return Math.max(
@@ -328,12 +385,14 @@ async function buildOverlayStory(
   config: OverlayConfig,
   getFont: (font: StandardFontName) => Promise<PDFFont>,
   maxWidth: number,
+  customBoxTitleFont: PDFFont | null,
   customBoxTextFont: PDFFont | null
 ) {
   const story: ParagraphLayout[] = [];
   if (entry.title && config.titleStyle) {
-    if (customBoxTextFont) {
-      story.push(...layoutTextWithFont(entry.title, config.titleStyle, customBoxTextFont, maxWidth));
+    const titleFont = customBoxTitleFont ?? customBoxTextFont;
+    if (titleFont) {
+      story.push(...layoutTextWithFont(entry.title, config.titleStyle, titleFont, maxWidth));
     } else {
       story.push(...(await layoutText(entry.title, config.titleStyle, getFont, maxWidth)));
     }

@@ -47,6 +47,18 @@ const MODES = [
     description: "A centered caption box at the bottom of every image page.",
     accent: "from-stone-300 via-neutral-200 to-zinc-300",
   },
+  {
+    value: "even-described-pictures",
+    label: "Even Described Pictures",
+    description: "A centered caption box appears on even pages only.",
+    accent: "from-sky-200 via-cyan-100 to-blue-100",
+  },
+  {
+    value: "fully-described-images",
+    label: "Fully Described Images",
+    description: "A left-aligned title and description sit together inside each image caption box.",
+    accent: "from-amber-200 via-orange-100 to-stone-100",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
@@ -74,6 +86,8 @@ type ModeValue =
   | "list-description"
   | "list-description-even"
   | "described-pictures"
+  | "even-described-pictures"
+  | "fully-described-images"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -139,15 +153,6 @@ const DEFAULT_FULL_FACT_FONT_OPTION: BookFontOption = {
 const DEFAULT_FULL_FACT_FONT_SOURCE_KEY = "__default_source__";
 const DEFAULT_FULL_FACT_FONT_SOURCE_LABEL = "Default";
 const FULL_FACT_FONT_PREVIEW_TEXT = "Cows remember familiar faces and build strong social bonds.";
-const DEFAULT_DOWNLOAD_TITLE = "Sloths Picture Book with Fascinating Facts";
-const DEFAULT_DOWNLOAD_DESCRIPTION = `Sloths are fascinating because they've mastered a unique, slow-motion lifestyle. They evolved from giant ground sloths the size of elephants into the chill tree-climbers we know today. By hosting entire mini-ecosystems of bugs and algae in their fur, they play a vital role in the rainforest.
-
-Inside, you'll find:
-
-Premium color interior
-Large print (8.5"x8.5")
-Educational and fun facts about cozs
-Wonderful real life sloths photographs that invoke awe and wonder`;
 const STACKED_EVEN_FACTS_PLACEHOLDER = `[
 "Coffee beans are not actually beans; they are the pits (seeds) of bright red berries called coffee cherries.",
 "The legend of coffee's discovery involves an Ethiopian goat herder named Kaldi, who noticed his goats became very energetic after eating certain berries.",
@@ -292,6 +297,168 @@ const DESCRIBED_PICTURES_PLACEHOLDER = `[
   "1999 Ford Mustang SVT Cobra",
   "2000 Chevrolet Camaro SS"
 ]`;
+const FULLY_DESCRIBED_IMAGES_PLACEHOLDER = `[
+  {
+    "title": "Espresso 🇮🇹",
+    "description": "Made by forcing hot water through finely ground coffee under high pressure to create a small, strong shot with crema."
+  },
+  {
+    "title": "Americano 🇮🇹",
+    "description": "Made by adding hot water to one or two shots of espresso for a lighter, longer black coffee."
+  },
+  {
+    "title": "Cappuccino 🇮🇹",
+    "description": "Made with espresso, steamed milk, and thick milk foam in balanced layers."
+  },
+  {
+    "title": "Latte 🇮🇹",
+    "description": "Made by mixing espresso with plenty of steamed milk and a thin layer of foam."
+  },
+  {
+    "title": "Flat White 🇦🇺",
+    "description": "Made with espresso and smooth microfoam milk, giving it a creamy texture and strong coffee flavor."
+  },
+  {
+    "title": "Macchiato 🇮🇹",
+    "description": "Made by topping a shot of espresso with a small amount of milk foam."
+  },
+  {
+    "title": "Mocha 🇮🇹",
+    "description": "Made by combining espresso, chocolate, steamed milk, and foam or whipped cream."
+  },
+  {
+    "title": "Cortado 🇪🇸",
+    "description": "Made by mixing espresso with an equal amount of warm milk to soften the strong coffee taste."
+  },
+  {
+    "title": "Ristretto 🇮🇹",
+    "description": "Made like espresso but with less water, creating a shorter, richer, and more concentrated shot."
+  },
+  {
+    "title": "Lungo 🇮🇹",
+    "description": "Made by pulling an espresso shot with more water for a longer and slightly lighter coffee."
+  },
+  {
+    "title": "Turkish Coffee 🇹🇷",
+    "description": "Made by slowly heating very finely ground coffee with water in a cezve until it becomes foamy."
+  },
+  {
+    "title": "Arabic Coffee 🇸🇦",
+    "description": "Made by boiling light-roast coffee with cardamom and serving it in small cups."
+  },
+  {
+    "title": "Moroccan Spiced Coffee 🇲🇦",
+    "description": "Made by brewing coffee with warm spices such as cinnamon, cardamom, nutmeg, and ginger."
+  },
+  {
+    "title": "Vietnamese Iced Coffee 🇻🇳",
+    "description": "Made by dripping strong coffee over sweetened condensed milk and serving it over ice."
+  },
+  {
+    "title": "Vietnamese Egg Coffee 🇻🇳",
+    "description": "Made by topping strong coffee with a whipped mixture of egg yolk and sweetened condensed milk."
+  },
+  {
+    "title": "Café au Lait 🇫🇷",
+    "description": "Made by mixing strong brewed coffee with hot milk in equal or near-equal parts."
+  },
+  {
+    "title": "Café de Olla 🇲🇽",
+    "description": "Made by simmering coffee with cinnamon and piloncillo or brown sugar in a clay pot."
+  },
+  {
+    "title": "Cuban Coffee 🇨🇺",
+    "description": "Made by brewing strong espresso and whipping the first drops with sugar to create a sweet foam."
+  },
+  {
+    "title": "Café Bombón 🇪🇸",
+    "description": "Made by layering espresso over sweetened condensed milk in a small glass."
+  },
+  {
+    "title": "Irish Coffee 🇮🇪",
+    "description": "Made by mixing hot coffee with sugar and Irish whiskey, then topping it with cream."
+  },
+  {
+    "title": "Affogato 🇮🇹",
+    "description": "Made by pouring a hot shot of espresso over vanilla gelato or ice cream."
+  },
+  {
+    "title": "Moka Pot Coffee 🇮🇹",
+    "description": "Made by brewing ground coffee with steam pressure in a stovetop moka pot."
+  },
+  {
+    "title": "French Press Coffee 🇫🇷",
+    "description": "Made by steeping coarse coffee grounds in hot water, then pressing them through a metal filter."
+  },
+  {
+    "title": "Pour Over Coffee 🇯🇵",
+    "description": "Made by slowly pouring hot water over ground coffee in a paper filter and letting it drip into a cup."
+  },
+  {
+    "title": "Cold Brew 🇳🇱",
+    "description": "Made by steeping coarse coffee grounds in cold water for several hours, then straining and serving chilled."
+  },
+  {
+    "title": "Nitro Cold Brew 🇺🇸",
+    "description": "Made by infusing cold brew coffee with nitrogen gas to create a creamy texture and foamy top."
+  },
+  {
+    "title": "Greek Frappé 🇬🇷",
+    "description": "Made by shaking instant coffee, sugar, and water into foam, then serving it with ice."
+  },
+  {
+    "title": "Dalgona Coffee 🇰🇷",
+    "description": "Made by whipping instant coffee, sugar, and hot water, then spooning it over milk."
+  },
+  {
+    "title": "Ethiopian Coffee 🇪🇹",
+    "description": "Made by brewing freshly roasted and ground coffee in a traditional jebena pot."
+  },
+  {
+    "title": "South Indian Filter Coffee 🇮🇳",
+    "description": "Made by mixing strong coffee decoction from a metal filter with hot milk and sugar."
+  },
+  {
+    "title": "Kopi Tubruk 🇮🇩",
+    "description": "Made by pouring hot water directly over ground coffee and letting the grounds settle before drinking."
+  },
+  {
+    "title": "Kopi Susu 🇮🇩",
+    "description": "Made by mixing strong coffee with sweetened condensed milk and serving it hot or iced."
+  },
+  {
+    "title": "Kopi Luwak 🇮🇩",
+    "description": "Made by brewing specially processed Indonesian coffee beans, usually served black to highlight their smooth flavor."
+  },
+  {
+    "title": "Pharisäer Coffee 🇩🇪",
+    "description": "Made by mixing strong coffee with rum and sugar, then topping it with whipped cream."
+  },
+  {
+    "title": "Mazagran 🇵🇹",
+    "description": "Made by serving strong coffee over ice, often with sugar and lemon for a refreshing taste."
+  },
+  {
+    "title": "Cafezinho 🇧🇷",
+    "description": "Made by brewing finely ground coffee with sugar and serving it strong in small cups."
+  },
+  {
+    "title": "Café Touba 🇸🇳",
+    "description": "Made by brewing coffee roasted with grains of Selim or cloves for a spicy aromatic flavor."
+  },
+  {
+    "title": "Qahwa 🇦🇪",
+    "description": "Made by simmering light-roast coffee with cardamom, sometimes saffron or cloves, and serving it in small cups."
+  },
+  {
+    "title": "Red Eye Coffee 🇺🇸",
+    "description": "Made by adding a shot of espresso to a cup of regular brewed coffee."
+  },
+  {
+    "title": "Breve 🇺🇸",
+    "description": "Made by combining espresso with steamed half-and-half for a rich and creamy coffee drink."
+  }
+]`;
 
 export function GeneratorApp(props: GeneratorAppProps) {
   const [step, setStep] = useState<WizardStep>(1);
@@ -299,10 +466,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [facts, setFacts] = useState(props.initialFacts?.trim() ? props.initialFacts : STACKED_EVEN_FACTS_PLACEHOLDER);
   const [list, setList] = useState(props.initialList ?? "");
   const [listDescription, setListDescription] = useState(props.initialListDescription ?? "");
-  const [downloadTitle, setDownloadTitle] = useState(DEFAULT_DOWNLOAD_TITLE);
-  const [downloadSubtitle, setDownloadSubtitle] = useState("");
-  const [downloadDescription, setDownloadDescription] = useState(DEFAULT_DOWNLOAD_DESCRIPTION);
-  const [downloadKeywords, setDownloadKeywords] = useState<string[]>(() => Array.from({ length: 7 }, () => ""));
   const [imageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
   const [pageCount, setPageCount] = useState(40);
@@ -323,17 +486,31 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [isFullFactFontSourceMenuOpen, setIsFullFactFontSourceMenuOpen] = useState(false);
   const [isFullFactFontSourceFiltering, setIsFullFactFontSourceFiltering] = useState(false);
   const [fullFactBoxFontId, setFullFactBoxFontId] = useState(DEFAULT_FULL_FACT_FONT_ID);
+  const [fullyDescribedTitleFontSourceKey, setFullyDescribedTitleFontSourceKey] =
+    useState(DEFAULT_FULL_FACT_FONT_SOURCE_KEY);
+  const [fullyDescribedTitleFontSourceSearch, setFullyDescribedTitleFontSourceSearch] =
+    useState(DEFAULT_FULL_FACT_FONT_SOURCE_LABEL);
+  const [isFullyDescribedTitleFontSourceMenuOpen, setIsFullyDescribedTitleFontSourceMenuOpen] = useState(false);
+  const [isFullyDescribedTitleFontSourceFiltering, setIsFullyDescribedTitleFontSourceFiltering] = useState(false);
+  const [fullyDescribedTitleFontId, setFullyDescribedTitleFontId] = useState(DEFAULT_FULL_FACT_FONT_ID);
   const [fullFactFontVariantSearch, setFullFactFontVariantSearch] = useState(
     formatFontVariantLabel(DEFAULT_FULL_FACT_FONT_OPTION, DEFAULT_FULL_FACT_FONT_SOURCE_LABEL)
   );
   const [isFullFactFontVariantMenuOpen, setIsFullFactFontVariantMenuOpen] = useState(false);
   const [isFullFactFontVariantFiltering, setIsFullFactFontVariantFiltering] = useState(false);
+  const [fullyDescribedTitleFontVariantSearch, setFullyDescribedTitleFontVariantSearch] = useState(
+    formatFontVariantLabel(DEFAULT_FULL_FACT_FONT_OPTION, DEFAULT_FULL_FACT_FONT_SOURCE_LABEL)
+  );
+  const [isFullyDescribedTitleFontVariantMenuOpen, setIsFullyDescribedTitleFontVariantMenuOpen] = useState(false);
+  const [isFullyDescribedTitleFontVariantFiltering, setIsFullyDescribedTitleFontVariantFiltering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const browserFontFileInputRef = useRef<HTMLInputElement | null>(null);
   const fullFactFontSourceInputRef = useRef<HTMLInputElement | null>(null);
   const fullFactFontVariantInputRef = useRef<HTMLInputElement | null>(null);
+  const fullyDescribedTitleFontSourceInputRef = useRef<HTMLInputElement | null>(null);
+  const fullyDescribedTitleFontVariantInputRef = useRef<HTMLInputElement | null>(null);
 
   const syncStepFromLocation = useCallback(() => {
     if (typeof window === "undefined") {
@@ -441,11 +618,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
-  const needsList = ["list", "described-pictures"].includes(mode);
-  const needsListDescription = ["list-description", "list-description-even"].includes(mode);
-  const supportsCircleColor = mode !== "described-pictures";
-  const supportsTextFontSelection = ["full-fact", "described-pictures"].includes(mode);
-  const isDescribedPicturesMode = mode === "described-pictures";
+  const isBasicDescribedPicturesMode = ["described-pictures", "even-described-pictures"].includes(mode);
+  const isFullyDescribedImagesMode = mode === "fully-described-images";
+  const isCaptionBoxMode = isBasicDescribedPicturesMode || isFullyDescribedImagesMode;
+  const needsList = ["list", "described-pictures", "even-described-pictures"].includes(mode);
+  const needsListDescription = ["list-description", "list-description-even", "fully-described-images"].includes(mode);
+  const supportsCircleColor = !isCaptionBoxMode;
+  const supportsTextFontSelection = mode === "full-fact" || isCaptionBoxMode;
+  const supportsCaptionTextAlignment = isBasicDescribedPicturesMode;
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
   const currentOpacity = mode === "full-fact" ? fullFactOpacity : overlayOpacity;
   const availableFonts = useMemo(() => [...serverFonts, ...browserFonts], [browserFonts, serverFonts]);
@@ -465,12 +645,24 @@ export function GeneratorApp(props: GeneratorAppProps) {
     () => fullFactFontSourceMap.get(fullFactFontSourceKey) ?? fullFactFontSourceGroups[0] ?? null,
     [fullFactFontSourceGroups, fullFactFontSourceKey, fullFactFontSourceMap]
   );
+  const selectedFullyDescribedTitleFontSource = useMemo(
+    () =>
+      fullFactFontSourceMap.get(fullyDescribedTitleFontSourceKey) ?? fullFactFontSourceGroups[0] ?? null,
+    [fullFactFontSourceGroups, fullFactFontSourceMap, fullyDescribedTitleFontSourceKey]
+  );
   const selectedFullFactFont = useMemo(
     () =>
       selectedFullFactFontSource?.variants.find((variant) => variant.id === fullFactBoxFontId) ??
       selectedFullFactFontSource?.variants[0] ??
       DEFAULT_FULL_FACT_FONT_OPTION,
     [fullFactBoxFontId, selectedFullFactFontSource]
+  );
+  const selectedFullyDescribedTitleFont = useMemo(
+    () =>
+      selectedFullyDescribedTitleFontSource?.variants.find((variant) => variant.id === fullyDescribedTitleFontId) ??
+      selectedFullyDescribedTitleFontSource?.variants[0] ??
+      DEFAULT_FULL_FACT_FONT_OPTION,
+    [fullyDescribedTitleFontId, selectedFullyDescribedTitleFontSource]
   );
   const customFontPreviewCss = useMemo(
     () =>
@@ -492,9 +684,27 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }
     return fullFactFontSourceGroups.filter((group) => group.searchText.includes(query));
   }, [fullFactFontSourceGroups, fullFactFontSourceSearch, isFullFactFontSourceFiltering]);
+  const filteredFullyDescribedTitleFontSourceGroups = useMemo(() => {
+    if (!isFullyDescribedTitleFontSourceFiltering) {
+      return fullFactFontSourceGroups;
+    }
+    const query = fullyDescribedTitleFontSourceSearch.trim().toLowerCase();
+    if (!query) {
+      return fullFactFontSourceGroups;
+    }
+    return fullFactFontSourceGroups.filter((group) => group.searchText.includes(query));
+  }, [
+    fullFactFontSourceGroups,
+    fullyDescribedTitleFontSourceSearch,
+    isFullyDescribedTitleFontSourceFiltering,
+  ]);
   const fullFactFontVariants = useMemo(
     () => selectedFullFactFontSource?.variants ?? [DEFAULT_FULL_FACT_FONT_OPTION],
     [selectedFullFactFontSource]
+  );
+  const fullyDescribedTitleFontVariants = useMemo(
+    () => selectedFullyDescribedTitleFontSource?.variants ?? [DEFAULT_FULL_FACT_FONT_OPTION],
+    [selectedFullyDescribedTitleFontSource]
   );
   const filteredFullFactFontVariants = useMemo(() => {
     if (!isFullFactFontVariantFiltering) {
@@ -508,6 +718,23 @@ export function GeneratorApp(props: GeneratorAppProps) {
       buildFontVariantSearchText(variant, selectedFullFactFontSource?.label).includes(query)
     );
   }, [fullFactFontVariantSearch, fullFactFontVariants, isFullFactFontVariantFiltering, selectedFullFactFontSource]);
+  const filteredFullyDescribedTitleFontVariants = useMemo(() => {
+    if (!isFullyDescribedTitleFontVariantFiltering) {
+      return fullyDescribedTitleFontVariants;
+    }
+    const query = fullyDescribedTitleFontVariantSearch.trim().toLowerCase();
+    if (!query) {
+      return fullyDescribedTitleFontVariants;
+    }
+    return fullyDescribedTitleFontVariants.filter((variant) =>
+      buildFontVariantSearchText(variant, selectedFullyDescribedTitleFontSource?.label).includes(query)
+    );
+  }, [
+    fullyDescribedTitleFontVariantSearch,
+    fullyDescribedTitleFontVariants,
+    isFullyDescribedTitleFontVariantFiltering,
+    selectedFullyDescribedTitleFontSource,
+  ]);
 
   useEffect(() => {
     const selectedSource = fullFactFontSourceMap.get(fullFactFontSourceKey);
@@ -533,6 +760,29 @@ export function GeneratorApp(props: GeneratorAppProps) {
   ]);
 
   useEffect(() => {
+    const selectedSource = fullFactFontSourceMap.get(fullyDescribedTitleFontSourceKey);
+    if (!selectedSource) {
+      const fallback = fullFactFontSourceGroups[0] ?? null;
+      if (!fallback) {
+        return;
+      }
+      setFullyDescribedTitleFontSourceKey(fallback.key);
+      setFullyDescribedTitleFontSourceSearch(fallback.label);
+      setFullyDescribedTitleFontId(fallback.variants[0]?.id ?? DEFAULT_FULL_FACT_FONT_ID);
+      return;
+    }
+
+    if (!selectedSource.variants.some((variant) => variant.id === fullyDescribedTitleFontId)) {
+      setFullyDescribedTitleFontId(selectedSource.variants[0]?.id ?? DEFAULT_FULL_FACT_FONT_ID);
+    }
+  }, [
+    fullFactFontSourceGroups,
+    fullFactFontSourceMap,
+    fullyDescribedTitleFontId,
+    fullyDescribedTitleFontSourceKey,
+  ]);
+
+  useEffect(() => {
     if (isFullFactFontVariantMenuOpen || isFullFactFontVariantFiltering) {
       return;
     }
@@ -542,6 +792,20 @@ export function GeneratorApp(props: GeneratorAppProps) {
     isFullFactFontVariantMenuOpen,
     selectedFullFactFont,
     selectedFullFactFontSource,
+  ]);
+
+  useEffect(() => {
+    if (isFullyDescribedTitleFontVariantMenuOpen || isFullyDescribedTitleFontVariantFiltering) {
+      return;
+    }
+    setFullyDescribedTitleFontVariantSearch(
+      formatFontVariantLabel(selectedFullyDescribedTitleFont, selectedFullyDescribedTitleFontSource?.label)
+    );
+  }, [
+    isFullyDescribedTitleFontVariantFiltering,
+    isFullyDescribedTitleFontVariantMenuOpen,
+    selectedFullyDescribedTitleFont,
+    selectedFullyDescribedTitleFontSource,
   ]);
 
   const selectFullFactFontSource = useCallback(
@@ -679,6 +943,156 @@ export function GeneratorApp(props: GeneratorAppProps) {
     fullFactFontVariantInputRef.current?.focus();
   }, [closeFullFactFontVariantMenu, isFullFactFontVariantMenuOpen]);
 
+  const selectFullyDescribedTitleFontSource = useCallback(
+    (group: FontSourceGroup) => {
+      const nextVariant =
+        group.variants.find((variant) => variant.id === fullyDescribedTitleFontId) ??
+        group.variants[0] ??
+        DEFAULT_FULL_FACT_FONT_OPTION;
+      setFullyDescribedTitleFontSourceKey(group.key);
+      setFullyDescribedTitleFontSourceSearch(group.label);
+      setFullyDescribedTitleFontId(nextVariant.id);
+      setFullyDescribedTitleFontVariantSearch(formatFontVariantLabel(nextVariant, group.label));
+      setIsFullyDescribedTitleFontSourceMenuOpen(false);
+      setIsFullyDescribedTitleFontSourceFiltering(false);
+      setIsFullyDescribedTitleFontVariantMenuOpen(false);
+      setIsFullyDescribedTitleFontVariantFiltering(false);
+    },
+    [fullyDescribedTitleFontId]
+  );
+
+  const selectFullyDescribedTitleFontVariant = useCallback(
+    (variant: BookFontOption) => {
+      setFullyDescribedTitleFontId(variant.id);
+      setFullyDescribedTitleFontVariantSearch(
+        formatFontVariantLabel(variant, selectedFullyDescribedTitleFontSource?.label)
+      );
+      setIsFullyDescribedTitleFontVariantMenuOpen(false);
+      setIsFullyDescribedTitleFontVariantFiltering(false);
+    },
+    [selectedFullyDescribedTitleFontSource]
+  );
+
+  const handleFullyDescribedTitleFontSourceChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      setFullyDescribedTitleFontSourceSearch(nextValue);
+      setIsFullyDescribedTitleFontSourceMenuOpen(true);
+      setIsFullyDescribedTitleFontSourceFiltering(true);
+      const match = findFontSourceGroupByLabel(fullFactFontSourceGroups, nextValue);
+      if (!match) {
+        return;
+      }
+      selectFullyDescribedTitleFontSource(match);
+    },
+    [fullFactFontSourceGroups, selectFullyDescribedTitleFontSource]
+  );
+
+  const closeFullyDescribedTitleFontSourceMenu = useCallback(() => {
+    setIsFullyDescribedTitleFontSourceMenuOpen(false);
+    setIsFullyDescribedTitleFontSourceFiltering(false);
+    const match = findFontSourceGroupByLabel(
+      fullFactFontSourceGroups,
+      fullyDescribedTitleFontSourceSearch
+    );
+    if (match) {
+      selectFullyDescribedTitleFontSource(match);
+      return;
+    }
+
+    const fallback = selectedFullyDescribedTitleFontSource ?? fullFactFontSourceGroups[0] ?? null;
+    if (fallback) {
+      setFullyDescribedTitleFontSourceSearch(fallback.label);
+    }
+  }, [
+    fullFactFontSourceGroups,
+    fullyDescribedTitleFontSourceSearch,
+    selectFullyDescribedTitleFontSource,
+    selectedFullyDescribedTitleFontSource,
+  ]);
+
+  const handleFullyDescribedTitleFontSourceBlur = useCallback(() => {
+    window.setTimeout(() => {
+      closeFullyDescribedTitleFontSourceMenu();
+    }, 0);
+  }, [closeFullyDescribedTitleFontSourceMenu]);
+
+  const handleFullyDescribedTitleFontSourceToggle = useCallback(() => {
+    if (isFullyDescribedTitleFontSourceMenuOpen) {
+      closeFullyDescribedTitleFontSourceMenu();
+      return;
+    }
+    setIsFullyDescribedTitleFontSourceMenuOpen(true);
+    setIsFullyDescribedTitleFontSourceFiltering(false);
+    fullyDescribedTitleFontSourceInputRef.current?.focus();
+  }, [closeFullyDescribedTitleFontSourceMenu, isFullyDescribedTitleFontSourceMenuOpen]);
+
+  const handleFullyDescribedTitleFontVariantFocus = useCallback(() => {
+    setIsFullyDescribedTitleFontVariantMenuOpen(true);
+    setIsFullyDescribedTitleFontVariantFiltering(false);
+  }, []);
+
+  const handleFullyDescribedTitleFontVariantChange = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      const nextValue = event.target.value;
+      setFullyDescribedTitleFontVariantSearch(nextValue);
+      setIsFullyDescribedTitleFontVariantMenuOpen(true);
+      setIsFullyDescribedTitleFontVariantFiltering(true);
+      const match = findFontVariantByLabel(
+        fullyDescribedTitleFontVariants,
+        nextValue,
+        selectedFullyDescribedTitleFontSource?.label
+      );
+      if (match) {
+        selectFullyDescribedTitleFontVariant(match);
+      }
+    },
+    [
+      fullyDescribedTitleFontVariants,
+      selectFullyDescribedTitleFontVariant,
+      selectedFullyDescribedTitleFontSource,
+    ]
+  );
+
+  const closeFullyDescribedTitleFontVariantMenu = useCallback(() => {
+    setIsFullyDescribedTitleFontVariantMenuOpen(false);
+    setIsFullyDescribedTitleFontVariantFiltering(false);
+    const match = findFontVariantByLabel(
+      fullyDescribedTitleFontVariants,
+      fullyDescribedTitleFontVariantSearch,
+      selectedFullyDescribedTitleFontSource?.label
+    );
+    if (match) {
+      selectFullyDescribedTitleFontVariant(match);
+      return;
+    }
+    setFullyDescribedTitleFontVariantSearch(
+      formatFontVariantLabel(selectedFullyDescribedTitleFont, selectedFullyDescribedTitleFontSource?.label)
+    );
+  }, [
+    fullyDescribedTitleFontVariantSearch,
+    fullyDescribedTitleFontVariants,
+    selectFullyDescribedTitleFontVariant,
+    selectedFullyDescribedTitleFont,
+    selectedFullyDescribedTitleFontSource,
+  ]);
+
+  const handleFullyDescribedTitleFontVariantBlur = useCallback(() => {
+    window.setTimeout(() => {
+      closeFullyDescribedTitleFontVariantMenu();
+    }, 0);
+  }, [closeFullyDescribedTitleFontVariantMenu]);
+
+  const handleFullyDescribedTitleFontVariantToggle = useCallback(() => {
+    if (isFullyDescribedTitleFontVariantMenuOpen) {
+      closeFullyDescribedTitleFontVariantMenu();
+      return;
+    }
+    setIsFullyDescribedTitleFontVariantMenuOpen(true);
+    setIsFullyDescribedTitleFontVariantFiltering(false);
+    fullyDescribedTitleFontVariantInputRef.current?.focus();
+  }, [closeFullyDescribedTitleFontVariantMenu, isFullyDescribedTitleFontVariantMenuOpen]);
+
   const handleBrowserFontUploadClick = useCallback(() => {
     browserFontFileInputRef.current?.click();
   }, []);
@@ -745,7 +1159,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (mode === "full-fact") {
       base.factsPerPage = factsPerPage;
     }
-    if (mode === "full-fact" || mode === "described-pictures") {
+    if (mode === "full-fact" || isCaptionBoxMode) {
       if (selectedFullFactFont.storageScope === "browser" && selectedFullFactFont.dataBase64) {
         base.fullFactUploadedFont = {
           bytesBase64: selectedFullFactFont.dataBase64,
@@ -756,7 +1170,18 @@ export function GeneratorApp(props: GeneratorAppProps) {
         base.fullFactBoxFontId = fullFactBoxFontId;
       }
     }
-    if (mode === "described-pictures") {
+    if (isFullyDescribedImagesMode) {
+      if (selectedFullyDescribedTitleFont.storageScope === "browser" && selectedFullyDescribedTitleFont.dataBase64) {
+        base.fullFactTitleUploadedFont = {
+          bytesBase64: selectedFullyDescribedTitleFont.dataBase64,
+          mimeType: selectedFullyDescribedTitleFont.mimeType,
+          fileName: selectedFullyDescribedTitleFont.fileName,
+        };
+      } else if (fullyDescribedTitleFontId !== DEFAULT_FULL_FACT_FONT_ID) {
+        base.fullFactTitleFontId = fullyDescribedTitleFontId;
+      }
+    }
+    if (isCaptionBoxMode) {
       base.describedPictureTextAlignment = describedPictureTextAlignment;
       base.describedPictureMaxBoxWidth = safeDescribedPictureMaxBoxWidth * 72;
     }
@@ -766,6 +1191,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     return base;
   }, [
     mode,
+    isCaptionBoxMode,
+    isFullyDescribedImagesMode,
     imageLibrary,
     numberBadgeColor,
     currentOpacity,
@@ -780,7 +1207,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
     describedPictureMaxBoxWidth,
     factsPerPage,
     fullFactBoxFontId,
+    fullyDescribedTitleFontId,
     selectedFullFactFont,
+    selectedFullyDescribedTitleFont,
     targetImageSize,
     pageSize,
     pageCount,
@@ -817,33 +1246,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const selectedMode = useMemo(() => MODES.find((item) => item.value === mode), [mode]);
   const stepFourTitle = mode === "full-fact" ? "Configure Facts" : `Configure ${selectedMode?.label ?? "the layout"}`;
-  const hasDownloadMetadata = useMemo(
-    () =>
-      Boolean(
-        downloadTitle.trim() ||
-          downloadSubtitle.trim() ||
-          downloadDescription.trim() ||
-          downloadKeywords.some((keyword) => keyword.trim())
-      ),
-    [downloadDescription, downloadKeywords, downloadSubtitle, downloadTitle]
-  );
-
-  const handleDownloadMetadata = useCallback(() => {
-    const content = buildMetadataDownloadText({
-      title: downloadTitle,
-      subtitle: downloadSubtitle,
-      description: downloadDescription,
-      keywords: downloadKeywords,
-    });
-    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = buildMetadataFileName(downloadTitle);
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-  }, [downloadDescription, downloadKeywords, downloadSubtitle, downloadTitle]);
-
   return (
     <div className="flex flex-col gap-8">
       {step === 1 && (
@@ -968,35 +1370,44 @@ export function GeneratorApp(props: GeneratorAppProps) {
               </div>
             </div>
           )}
-          {isDescribedPicturesMode && (
+          {isCaptionBoxMode && (
             <div className="space-y-3">
-              <div className="space-y-1">
-                <p className="text-sm font-semibold text-zinc-700">Text Alignment</p>
-                <p className="text-xs text-zinc-500">Choose how the caption text sits inside the box.</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {([
-                  { value: "center", label: "Centered", description: "Balanced caption centered inside the box." },
-                  { value: "left", label: "Left Aligned", description: "Caption text starts flush from the left edge." },
-                ] as const).map((option) => {
-                  const isActive = option.value === describedPictureTextAlignment;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setDescribedPictureTextAlignment(option.value)}
-                      aria-pressed={isActive}
-                      className={`flex flex-col gap-1 rounded-2xl border bg-white p-4 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
-                        isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
-                      }`}
-                    >
-                      <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
-                      <span className="text-xs text-zinc-600">{option.description}</span>
-                      {isActive ? <span className="text-xs font-medium text-emerald-600">Selected</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
+              {supportsCaptionTextAlignment ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm font-semibold text-zinc-700">Text Alignment</p>
+                    <p className="text-xs text-zinc-500">Choose how the caption text sits inside the box.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {([
+                      { value: "center", label: "Centered", description: "Balanced caption centered inside the box." },
+                      { value: "left", label: "Left Aligned", description: "Caption text starts flush from the left edge." },
+                    ] as const).map((option) => {
+                      const isActive = option.value === describedPictureTextAlignment;
+                      return (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() => setDescribedPictureTextAlignment(option.value)}
+                          aria-pressed={isActive}
+                          className={`flex flex-col gap-1 rounded-2xl border bg-white p-4 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                            isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                          }`}
+                        >
+                          <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
+                          <span className="text-xs text-zinc-600">{option.description}</span>
+                          {isActive ? <span className="text-xs font-medium text-emerald-600">Selected</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1">
+                  <p className="text-sm font-semibold text-zinc-700">Text Alignment</p>
+                  <p className="text-xs text-zinc-500">This layout keeps the title and description left aligned.</p>
+                </div>
+              )}
               <label className="flex flex-col gap-2 sm:max-w-xs">
                 <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
                 <input
@@ -1022,7 +1433,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               {customFontPreviewCss ? <style>{customFontPreviewCss}</style> : null}
               <div className="flex items-center justify-between gap-3">
                 <label className="text-sm font-semibold text-zinc-700">
-                  {isDescribedPicturesMode ? "Caption Font" : "Select Font"}
+                  {isFullyDescribedImagesMode ? "Caption Fonts" : isCaptionBoxMode ? "Caption Font" : "Select Font"}
                 </label>
                 <button
                   type="button"
@@ -1040,177 +1451,535 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 />
               </div>
               {fontsError && <p className="text-sm text-red-600">{fontsError}</p>}
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-zinc-700">Font</span>
-                  <div className="relative">
-                    <input
-                      ref={fullFactFontSourceInputRef}
-                      type="text"
-                      value={fullFactFontSourceSearch}
-                      onChange={handleFullFactFontSourceChange}
-                      onFocus={() => {
-                        setIsFullFactFontSourceMenuOpen(true);
-                        setIsFullFactFontSourceFiltering(false);
+              {isFullyDescribedImagesMode ? (
+                <>
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-zinc-900">Title Font</p>
+                        <p className="text-xs text-zinc-500">Choose the family and subfont for the title line.</p>
+                      </div>
+                      <div className="mt-4 grid gap-4">
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-zinc-700">Font Family</span>
+                          <div className="relative">
+                            <input
+                              ref={fullyDescribedTitleFontSourceInputRef}
+                              type="text"
+                              value={fullyDescribedTitleFontSourceSearch}
+                              onChange={handleFullyDescribedTitleFontSourceChange}
+                              onFocus={() => {
+                                setIsFullyDescribedTitleFontSourceMenuOpen(true);
+                                setIsFullyDescribedTitleFontSourceFiltering(false);
+                              }}
+                              onBlur={handleFullyDescribedTitleFontSourceBlur}
+                              placeholder="Search font family..."
+                              role="combobox"
+                              aria-expanded={isFullyDescribedTitleFontSourceMenuOpen}
+                              aria-controls="fully-described-title-font-source-menu"
+                              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Toggle title font family menu"
+                              aria-expanded={isFullyDescribedTitleFontSourceMenuOpen}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={handleFullyDescribedTitleFontSourceToggle}
+                              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                className={`h-4 w-4 transition-transform ${isFullyDescribedTitleFontSourceMenuOpen ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m5 7.5 5 5 5-5" />
+                              </svg>
+                            </button>
+                            {isFullyDescribedTitleFontSourceMenuOpen && (
+                              <div
+                                id="fully-described-title-font-source-menu"
+                                className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                              >
+                                {filteredFullyDescribedTitleFontSourceGroups.length > 0 ? (
+                                  filteredFullyDescribedTitleFontSourceGroups.map((group) => {
+                                    const isSelected = group.key === selectedFullyDescribedTitleFontSource?.key;
+                                    return (
+                                      <button
+                                        key={group.key}
+                                        type="button"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => selectFullyDescribedTitleFontSource(group)}
+                                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                          isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                        }`}
+                                      >
+                                        <span className="truncate">{group.label}</span>
+                                        <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                          {group.variants.length} {group.variants.length === 1 ? "style" : "styles"}
+                                        </span>
+                                      </button>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="px-3 py-2 text-sm text-zinc-500">No font families match.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-zinc-700">Variety</span>
+                          <div className="relative">
+                            <input
+                              ref={fullyDescribedTitleFontVariantInputRef}
+                              type="text"
+                              value={fullyDescribedTitleFontVariantSearch}
+                              onChange={handleFullyDescribedTitleFontVariantChange}
+                              onFocus={handleFullyDescribedTitleFontVariantFocus}
+                              onBlur={handleFullyDescribedTitleFontVariantBlur}
+                              placeholder="Search variety..."
+                              role="combobox"
+                              aria-expanded={isFullyDescribedTitleFontVariantMenuOpen}
+                              aria-controls="fully-described-title-font-variant-menu"
+                              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Toggle title font variety menu"
+                              aria-expanded={isFullyDescribedTitleFontVariantMenuOpen}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={handleFullyDescribedTitleFontVariantToggle}
+                              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                className={`h-4 w-4 transition-transform ${isFullyDescribedTitleFontVariantMenuOpen ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m5 7.5 5 5 5-5" />
+                              </svg>
+                            </button>
+                            {isFullyDescribedTitleFontVariantMenuOpen && (
+                              <div
+                                id="fully-described-title-font-variant-menu"
+                                className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                              >
+                                {filteredFullyDescribedTitleFontVariants.length > 0 ? (
+                                  filteredFullyDescribedTitleFontVariants.map((option) => {
+                                    const label = formatFontVariantLabel(
+                                      option,
+                                      selectedFullyDescribedTitleFontSource?.label
+                                    );
+                                    const isSelected = option.id === selectedFullyDescribedTitleFont.id;
+                                    return (
+                                      <button
+                                        key={option.id}
+                                        type="button"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => selectFullyDescribedTitleFontVariant(option)}
+                                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                          isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                        }`}
+                                      >
+                                        <span className="truncate">{label}</span>
+                                        <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                          {option.format === "truetype" ? "TTF" : "OTF"}
+                                        </span>
+                                      </button>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="px-3 py-2 text-sm text-zinc-500">No varieties match.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                      <div className="mt-4 space-y-1">
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {selectedFullyDescribedTitleFontSource?.label ?? DEFAULT_FULL_FACT_FONT_SOURCE_LABEL}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {formatFontVariantLabel(selectedFullyDescribedTitleFont, selectedFullyDescribedTitleFontSource?.label)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-zinc-900">Description Font</p>
+                        <p className="text-xs text-zinc-500">Choose the family and subfont for the description text.</p>
+                      </div>
+                      <div className="mt-4 grid gap-4">
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-zinc-700">Font Family</span>
+                          <div className="relative">
+                            <input
+                              ref={fullFactFontSourceInputRef}
+                              type="text"
+                              value={fullFactFontSourceSearch}
+                              onChange={handleFullFactFontSourceChange}
+                              onFocus={() => {
+                                setIsFullFactFontSourceMenuOpen(true);
+                                setIsFullFactFontSourceFiltering(false);
+                              }}
+                              onBlur={handleFullFactFontSourceBlur}
+                              placeholder="Search font family..."
+                              role="combobox"
+                              aria-expanded={isFullFactFontSourceMenuOpen}
+                              aria-controls="full-fact-font-source-menu"
+                              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Toggle description font family menu"
+                              aria-expanded={isFullFactFontSourceMenuOpen}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={handleFullFactFontSourceToggle}
+                              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                className={`h-4 w-4 transition-transform ${isFullFactFontSourceMenuOpen ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m5 7.5 5 5 5-5" />
+                              </svg>
+                            </button>
+                            {isFullFactFontSourceMenuOpen && (
+                              <div
+                                id="full-fact-font-source-menu"
+                                className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                              >
+                                {filteredFullFactFontSourceGroups.length > 0 ? (
+                                  filteredFullFactFontSourceGroups.map((group) => {
+                                    const isSelected = group.key === selectedFullFactFontSource?.key;
+                                    return (
+                                      <button
+                                        key={group.key}
+                                        type="button"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => selectFullFactFontSource(group)}
+                                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                          isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                        }`}
+                                      >
+                                        <span className="truncate">{group.label}</span>
+                                        <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                          {group.variants.length} {group.variants.length === 1 ? "style" : "styles"}
+                                        </span>
+                                      </button>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="px-3 py-2 text-sm text-zinc-500">No font families match.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                        <label className="flex flex-col gap-2">
+                          <span className="text-sm font-medium text-zinc-700">Variety</span>
+                          <div className="relative">
+                            <input
+                              ref={fullFactFontVariantInputRef}
+                              type="text"
+                              value={fullFactFontVariantSearch}
+                              onChange={handleFullFactFontVariantChange}
+                              onFocus={handleFullFactFontVariantFocus}
+                              onBlur={handleFullFactFontVariantBlur}
+                              placeholder="Search variety..."
+                              role="combobox"
+                              aria-expanded={isFullFactFontVariantMenuOpen}
+                              aria-controls="full-fact-font-variant-menu"
+                              className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              aria-label="Toggle description font variety menu"
+                              aria-expanded={isFullFactFontVariantMenuOpen}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={handleFullFactFontVariantToggle}
+                              className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                            >
+                              <svg
+                                aria-hidden="true"
+                                viewBox="0 0 20 20"
+                                className={`h-4 w-4 transition-transform ${isFullFactFontVariantMenuOpen ? "rotate-180" : ""}`}
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="m5 7.5 5 5 5-5" />
+                              </svg>
+                            </button>
+                            {isFullFactFontVariantMenuOpen && (
+                              <div
+                                id="full-fact-font-variant-menu"
+                                className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                              >
+                                {filteredFullFactFontVariants.length > 0 ? (
+                                  filteredFullFactFontVariants.map((option) => {
+                                    const label = formatFontVariantLabel(option, selectedFullFactFontSource?.label);
+                                    const isSelected = option.id === selectedFullFactFont.id;
+                                    return (
+                                      <button
+                                        key={option.id}
+                                        type="button"
+                                        onMouseDown={(event) => event.preventDefault()}
+                                        onClick={() => selectFullFactFontVariant(option)}
+                                        className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                          isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                        }`}
+                                      >
+                                        <span className="truncate">{label}</span>
+                                        <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                          {option.format === "truetype" ? "TTF" : "OTF"}
+                                        </span>
+                                      </button>
+                                    );
+                                  })
+                                ) : (
+                                  <p className="px-3 py-2 text-sm text-zinc-500">No varieties match.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </label>
+                      </div>
+                      <div className="mt-4 space-y-1">
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {selectedFullFactFontSource?.label ?? DEFAULT_FULL_FACT_FONT_SOURCE_LABEL}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        Title: {formatFontOptionDisplayLabel(selectedFullyDescribedTitleFont)}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        Description: {formatFontOptionDisplayLabel(selectedFullFactFont)}
+                      </p>
+                    </div>
+                    <div className="mt-3 flex justify-center">
+                      <div
+                        className="max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
+                        style={{ maxWidth: `${Math.round(Math.min(7, Math.max(3, describedPictureMaxBoxWidth)) * 96)}px` }}
+                      >
+                        <div
+                          className="text-lg leading-tight text-zinc-900"
+                          style={{ fontFamily: selectedFullyDescribedTitleFont.previewFamily, textAlign: "left" }}
+                        >
+                          Espresso
+                        </div>
+                        <div
+                          className="mt-2 text-base leading-snug text-zinc-700"
+                          style={{ fontFamily: selectedFullFactFont.previewFamily, textAlign: "left" }}
+                        >
+                          Made by forcing hot water through finely ground coffee under high pressure to create a small,
+                          strong shot with crema.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-zinc-700">Font</span>
+                      <div className="relative">
+                        <input
+                          ref={fullFactFontSourceInputRef}
+                          type="text"
+                          value={fullFactFontSourceSearch}
+                          onChange={handleFullFactFontSourceChange}
+                          onFocus={() => {
+                            setIsFullFactFontSourceMenuOpen(true);
+                            setIsFullFactFontSourceFiltering(false);
+                          }}
+                          onBlur={handleFullFactFontSourceBlur}
+                          placeholder="Search font family..."
+                          role="combobox"
+                          aria-expanded={isFullFactFontSourceMenuOpen}
+                          aria-controls="full-fact-font-source-menu"
+                          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Toggle font family menu"
+                          aria-expanded={isFullFactFontSourceMenuOpen}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={handleFullFactFontSourceToggle}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className={`h-4 w-4 transition-transform ${isFullFactFontSourceMenuOpen ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="m5 7.5 5 5 5-5" />
+                          </svg>
+                        </button>
+                        {isFullFactFontSourceMenuOpen && (
+                          <div
+                            id="full-fact-font-source-menu"
+                            className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                          >
+                            {filteredFullFactFontSourceGroups.length > 0 ? (
+                              filteredFullFactFontSourceGroups.map((group) => {
+                                const isSelected = group.key === selectedFullFactFontSource?.key;
+                                return (
+                                  <button
+                                    key={group.key}
+                                    type="button"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => selectFullFactFontSource(group)}
+                                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                      isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                    }`}
+                                  >
+                                    <span className="truncate">{group.label}</span>
+                                    <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                      {group.variants.length} {group.variants.length === 1 ? "style" : "styles"}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <p className="px-3 py-2 text-sm text-zinc-500">No font families match.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-medium text-zinc-700">Variety</span>
+                      <div className="relative">
+                        <input
+                          ref={fullFactFontVariantInputRef}
+                          type="text"
+                          value={fullFactFontVariantSearch}
+                          onChange={handleFullFactFontVariantChange}
+                          onFocus={handleFullFactFontVariantFocus}
+                          onBlur={handleFullFactFontVariantBlur}
+                          placeholder="Search variety..."
+                          role="combobox"
+                          aria-expanded={isFullFactFontVariantMenuOpen}
+                          aria-controls="full-fact-font-variant-menu"
+                          className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Toggle font variety menu"
+                          aria-expanded={isFullFactFontVariantMenuOpen}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={handleFullFactFontVariantToggle}
+                          className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
+                        >
+                          <svg
+                            aria-hidden="true"
+                            viewBox="0 0 20 20"
+                            className={`h-4 w-4 transition-transform ${isFullFactFontVariantMenuOpen ? "rotate-180" : ""}`}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.8"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="m5 7.5 5 5 5-5" />
+                          </svg>
+                        </button>
+                        {isFullFactFontVariantMenuOpen && (
+                          <div
+                            id="full-fact-font-variant-menu"
+                            className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                          >
+                            {filteredFullFactFontVariants.length > 0 ? (
+                              filteredFullFactFontVariants.map((option) => {
+                                const label = formatFontVariantLabel(option, selectedFullFactFontSource?.label);
+                                const isSelected = option.id === selectedFullFactFont.id;
+                                return (
+                                  <button
+                                    key={option.id}
+                                    type="button"
+                                    onMouseDown={(event) => event.preventDefault()}
+                                    onClick={() => selectFullFactFontVariant(option)}
+                                    className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
+                                      isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
+                                    }`}
+                                  >
+                                    <span className="truncate">{label}</span>
+                                    <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
+                                      {option.format === "truetype" ? "TTF" : "OTF"}
+                                    </span>
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <p className="px-3 py-2 text-sm text-zinc-500">No varieties match.</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                  <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-zinc-900">
+                        {selectedFullFactFontSource?.label ?? DEFAULT_FULL_FACT_FONT_SOURCE_LABEL}
+                      </p>
+                      <p className="text-xs text-zinc-500">
+                        {formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label)}
+                      </p>
+                    </div>
+                    <div
+                      className={`mt-3 ${isCaptionBoxMode ? "flex" : ""}`}
+                      style={{
+                        justifyContent: isCaptionBoxMode && describedPictureTextAlignment === "left" ? "flex-start" : "center",
                       }}
-                      onBlur={handleFullFactFontSourceBlur}
-                      placeholder="Search font family..."
-                      role="combobox"
-                      aria-expanded={isFullFactFontSourceMenuOpen}
-                      aria-controls="full-fact-font-source-menu"
-                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Toggle font family menu"
-                      aria-expanded={isFullFactFontSourceMenuOpen}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={handleFullFactFontSourceToggle}
-                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
                     >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        className={`h-4 w-4 transition-transform ${isFullFactFontSourceMenuOpen ? "rotate-180" : ""}`}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m5 7.5 5 5 5-5" />
-                      </svg>
-                    </button>
-                    {isFullFactFontSourceMenuOpen && (
                       <div
-                        id="full-fact-font-source-menu"
-                        className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
+                        className={`text-2xl leading-snug text-zinc-800 ${isCaptionBoxMode ? "max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3" : ""}`}
+                        style={{
+                          fontFamily: selectedFullFactFont.previewFamily,
+                          textAlign: isCaptionBoxMode ? describedPictureTextAlignment : "left",
+                          maxWidth: isCaptionBoxMode ? `${Math.round(Math.min(7, Math.max(3, describedPictureMaxBoxWidth)) * 96)}px` : undefined,
+                        }}
                       >
-                        {filteredFullFactFontSourceGroups.length > 0 ? (
-                          filteredFullFactFontSourceGroups.map((group) => {
-                            const isSelected = group.key === selectedFullFactFontSource?.key;
-                            return (
-                              <button
-                                key={group.key}
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => selectFullFactFontSource(group)}
-                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
-                                  isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
-                                }`}
-                              >
-                                <span className="truncate">{group.label}</span>
-                                <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
-                                  {group.variants.length} {group.variants.length === 1 ? "style" : "styles"}
-                                </span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <p className="px-3 py-2 text-sm text-zinc-500">No font families match.</p>
-                        )}
+                        {isCaptionBoxMode ? "1970 Ford Torino Cobra" : FULL_FACT_FONT_PREVIEW_TEXT}
                       </div>
-                    )}
+                    </div>
                   </div>
-                </label>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-zinc-700">Variety</span>
-                  <div className="relative">
-                    <input
-                      ref={fullFactFontVariantInputRef}
-                      type="text"
-                      value={fullFactFontVariantSearch}
-                      onChange={handleFullFactFontVariantChange}
-                      onFocus={handleFullFactFontVariantFocus}
-                      onBlur={handleFullFactFontVariantBlur}
-                      placeholder="Search variety..."
-                      role="combobox"
-                      aria-expanded={isFullFactFontVariantMenuOpen}
-                      aria-controls="full-fact-font-variant-menu"
-                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 pr-11 text-sm text-zinc-900 hover:cursor-pointer focus:cursor-text focus:border-black focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      aria-label="Toggle font variety menu"
-                      aria-expanded={isFullFactFontVariantMenuOpen}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={handleFullFactFontVariantToggle}
-                      className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-md text-zinc-500 transition hover:cursor-pointer hover:text-zinc-900"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        viewBox="0 0 20 20"
-                        className={`h-4 w-4 transition-transform ${isFullFactFontVariantMenuOpen ? "rotate-180" : ""}`}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <path d="m5 7.5 5 5 5-5" />
-                      </svg>
-                    </button>
-                    {isFullFactFontVariantMenuOpen && (
-                      <div
-                        id="full-fact-font-variant-menu"
-                        className="absolute z-20 mt-2 max-h-64 w-full overflow-auto rounded-xl border border-zinc-200 bg-white p-1 shadow-lg"
-                      >
-                        {filteredFullFactFontVariants.length > 0 ? (
-                          filteredFullFactFontVariants.map((option) => {
-                            const label = formatFontVariantLabel(option, selectedFullFactFontSource?.label);
-                            const isSelected = option.id === selectedFullFactFont.id;
-                            return (
-                              <button
-                                key={option.id}
-                                type="button"
-                                onMouseDown={(event) => event.preventDefault()}
-                                onClick={() => selectFullFactFontVariant(option)}
-                                className={`flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition ${
-                                  isSelected ? "bg-zinc-900 text-white" : "text-zinc-800 hover:bg-zinc-100"
-                                }`}
-                              >
-                                <span className="truncate">{label}</span>
-                                <span className={`ml-3 text-xs ${isSelected ? "text-zinc-300" : "text-zinc-500"}`}>
-                                  {option.format === "truetype" ? "TTF" : "OTF"}
-                                </span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <p className="px-3 py-2 text-sm text-zinc-500">No varieties match.</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </label>
-              </div>
-              <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-zinc-900">
-                    {selectedFullFactFontSource?.label ?? DEFAULT_FULL_FACT_FONT_SOURCE_LABEL}
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    {formatFontVariantLabel(selectedFullFactFont, selectedFullFactFontSource?.label)}
-                  </p>
-                </div>
-                <div
-                  className={`mt-3 ${isDescribedPicturesMode ? "flex" : ""}`}
-                  style={{
-                    justifyContent: isDescribedPicturesMode && describedPictureTextAlignment === "left" ? "flex-start" : "center",
-                  }}
-                >
-                  <div
-                    className={`text-2xl leading-snug text-zinc-800 ${isDescribedPicturesMode ? "max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3" : ""}`}
-                    style={{
-                      fontFamily: selectedFullFactFont.previewFamily,
-                      textAlign: isDescribedPicturesMode ? describedPictureTextAlignment : "left",
-                      maxWidth: isDescribedPicturesMode ? `${Math.round(Math.min(7, Math.max(3, describedPictureMaxBoxWidth)) * 96)}px` : undefined,
-                    }}
-                  >
-                    {isDescribedPicturesMode ? "1970 Ford Torino Cobra" : FULL_FACT_FONT_PREVIEW_TEXT}
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
               {loadingFonts || availableFonts.length === 0 ? (
                 <p className="text-xs text-zinc-500">
                   {loadingFonts
@@ -1241,6 +2010,22 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
       {step === 3 && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => navigateToStep(2)}
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
+            >
+              Back: Page specs
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateToStep(4)}
+              className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            >
+              Configure Content
+            </button>
+          </div>
           <ImageStudio />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -1298,7 +2083,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <textarea
               value={facts}
               onChange={(event) => setFacts(event.target.value)}
-              className="h-44 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+              className="h-[500px] rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={mode === "full-fact"
                 ? "Paste facts here as JSON or one fact per line"
                 : `[
@@ -1313,9 +2098,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label htmlFor="list-input" className="text-sm font-medium text-zinc-700">
-                {mode === "described-pictures" ? "Picture Descriptions" : "List Entries"}
+                {isCaptionBoxMode ? "Picture Descriptions" : "List Entries"}
               </label>
-              {mode === "described-pictures" && (
+              {isCaptionBoxMode && (
                 <button
                   type="button"
                   onClick={() => setList(DESCRIBED_PICTURES_PLACEHOLDER)}
@@ -1329,9 +2114,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
               id="list-input"
               value={list}
               onChange={(event) => setList(event.target.value)}
-              className="h-32 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+              className="h-[500px] rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={
-                mode === "described-pictures"
+                isCaptionBoxMode
                   ? DESCRIBED_PICTURES_PLACEHOLDER
                   : "Paste data/list.json or provide one item per line"
               }
@@ -1341,12 +2126,29 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
         {needsListDescription && (
           <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium text-zinc-700">Title + Description</label>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label className="text-sm font-medium text-zinc-700">
+                {isFullyDescribedImagesMode ? "Titles + Descriptions" : "Title + Description"}
+              </label>
+              {isFullyDescribedImagesMode ? (
+                <button
+                  type="button"
+                  onClick={() => setListDescription(FULLY_DESCRIBED_IMAGES_PLACEHOLDER)}
+                  className="self-start rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                >
+                  Use sample JSON
+                </button>
+              ) : null}
+            </div>
             <textarea
               value={listDescription}
               onChange={(event) => setListDescription(event.target.value)}
-              className="h-40 rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-              placeholder='Supports [{"title": "...", "description": "..."}] or "Title | description" lines'
+              className="h-[500px] rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+              placeholder={
+                isFullyDescribedImagesMode
+                  ? FULLY_DESCRIBED_IMAGES_PLACEHOLDER
+                  : 'Supports [{"title": "...", "description": "..."}] or "Title | description" lines'
+              }
             />
           </div>
         )}
@@ -1398,66 +2200,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
             </button>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50/70 p-5">
-            <div className="space-y-1">
-              <h4 className="text-base font-semibold text-zinc-900">Metadata</h4>
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-zinc-700">Title</span>
-                <input
-                  type="text"
-                  value={downloadTitle}
-                  onChange={(event) => setDownloadTitle(event.target.value)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-zinc-700">Subtitle</span>
-                <input
-                  type="text"
-                  value={downloadSubtitle}
-                  onChange={(event) => setDownloadSubtitle(event.target.value)}
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                />
-              </label>
-              <label className="flex flex-col gap-2 md:col-span-2">
-                <span className="text-sm font-medium text-zinc-700">Description</span>
-                <textarea
-                  value={downloadDescription}
-                  onChange={(event) => setDownloadDescription(event.target.value)}
-                  className="min-h-28 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                />
-              </label>
-              {downloadKeywords.map((keyword, index) => (
-                <label key={`download-keyword-${index}`} className="flex flex-col gap-2">
-                  <span className="text-sm font-medium text-zinc-700">Keyword {index + 1}</span>
-                  <input
-                    type="text"
-                    value={keyword}
-                    onChange={(event) =>
-                      setDownloadKeywords((current) =>
-                        current.map((value, keywordIndex) => (keywordIndex === index ? event.target.value : value))
-                      )
-                    }
-                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-                  />
-                </label>
-              ))}
-            </div>
-            {hasDownloadMetadata && (
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleDownloadMetadata}
-                  className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800"
-                >
-                  Download TXT
-                </button>
-              </div>
-            )}
-          </div>
-
           {error && <p className="text-sm text-red-600">{error}</p>}
           {successMessage && <p className="text-sm text-emerald-600">{successMessage}</p>}
         </section>
@@ -1484,7 +2226,7 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
     return (
       <div aria-hidden="true" className="relative aspect-[1595/821] overflow-hidden rounded-t-2xl bg-zinc-100">
         <Image
-          src="/even-stacked-facts.png"
+          src="/even-stacked-facts.webp"
           alt="Stacked Even Facts preview"
           fill
           priority
@@ -1497,17 +2239,49 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
 
   if (mode === "described-pictures") {
     return (
-      <div
-        aria-hidden="true"
-        className="relative aspect-[4/3] overflow-hidden rounded-t-2xl bg-gradient-to-br from-stone-200 via-neutral-100 to-zinc-200"
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.65),_transparent_55%)]" />
-        <p className="absolute inset-x-0 top-[42%] text-center font-serif text-sm italic text-stone-500">
-          Add imagery to ./images/
-        </p>
+      <div aria-hidden="true" className="relative aspect-[1338/668] overflow-hidden rounded-t-2xl bg-zinc-100">
+        <Image
+          src="/described-images.webp"
+          alt="Described Pictures preview"
+          fill
+          sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover object-center"
+        />
+      </div>
+    );
+  }
+
+  if (mode === "even-described-pictures") {
+    return (
+      <div aria-hidden="true" className="relative aspect-[1364/679] overflow-hidden rounded-t-2xl bg-zinc-100">
+        <Image
+          src="/even-described-images.webp"
+          alt="Even Described Pictures preview"
+          fill
+          sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover object-center"
+        />
+      </div>
+    );
+  }
+
+  if (mode === "fully-described-images") {
+    return (
+      <div aria-hidden="true" className="relative aspect-[1338/668] overflow-hidden rounded-t-2xl bg-zinc-100">
+        <Image
+          src="/described-images.webp"
+          alt="Fully Described Images preview"
+          fill
+          sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover object-center"
+        />
         <div className="absolute inset-x-0 bottom-5 flex justify-center px-5">
-          <div className="rounded-2xl border border-stone-300/80 bg-white/90 px-4 py-3 text-center text-sm font-medium text-stone-800 shadow-sm">
-            1970 Ford Torino Cobra
+          <div className="w-full max-w-[72%] rounded-2xl border border-stone-300/80 bg-white/92 px-4 py-3 shadow-sm">
+            <p className="text-left text-sm font-semibold text-stone-900">Espresso</p>
+            <p className="mt-1 text-left text-xs leading-snug text-stone-700">
+              Made by forcing hot water through finely ground coffee under high pressure to create a small, strong shot
+              with crema.
+            </p>
           </div>
         </div>
       </div>
@@ -1612,6 +2386,15 @@ function formatFontVariantLabel(option: BookFontOption, sourceLabel?: string) {
   return normalizedSubfamily || "Regular";
 }
 
+function formatFontOptionDisplayLabel(option: BookFontOption) {
+  if (option.id === DEFAULT_FULL_FACT_FONT_ID) {
+    return DEFAULT_FULL_FACT_FONT_SOURCE_LABEL;
+  }
+  const familyLabel = normalizeFontText(option.familyName || option.fullName || stripExtension(option.fileName)) || option.label;
+  const variantLabel = formatFontVariantLabel(option, familyLabel);
+  return variantLabel && variantLabel !== "Regular" ? `${familyLabel} - ${variantLabel}` : familyLabel;
+}
+
 function findFontSourceGroupByLabel(groups: FontSourceGroup[], value: string) {
   const normalized = value.trim().toLowerCase();
   if (!normalized) {
@@ -1710,42 +2493,6 @@ function escapeRegExp(value: string) {
 
 function stripExtension(value: string) {
   return value.replace(/\.[^.]+$/, "");
-}
-
-function buildMetadataDownloadText({
-  title,
-  subtitle,
-  description,
-  keywords,
-}: {
-  title: string;
-  subtitle: string;
-  description: string;
-  keywords: string[];
-}) {
-  const normalizedKeywords = keywords.map((keyword) => keyword.trim()).filter(Boolean);
-  return [
-    "Title:",
-    title.trim(),
-    "",
-    "Subtitle:",
-    subtitle.trim(),
-    "",
-    "Description:",
-    description.trim(),
-    "",
-    "Keywords:",
-    normalizedKeywords.join("\n"),
-  ].join("\n");
-}
-
-function buildMetadataFileName(title: string) {
-  const normalized = title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
-  return `${normalized || "book-details"}.txt`;
 }
 
 function revokeFontPreviewUrls(fonts: BookFontOption[]) {

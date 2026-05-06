@@ -11,6 +11,8 @@ const schema = z.object({
     "list-description",
     "list-description-even",
     "described-pictures",
+    "even-described-pictures",
+    "fully-described-images",
     "image-only",
     "full-fact",
     "dictionary",
@@ -32,6 +34,14 @@ const schema = z.object({
       fileName: z.string().min(1).optional(),
     })
     .optional(),
+  fullFactTitleFontId: z.string().min(1).optional(),
+  fullFactTitleUploadedFont: z
+    .object({
+      bytesBase64: z.string().min(1),
+      mimeType: z.string().min(1).optional(),
+      fileName: z.string().min(1).optional(),
+    })
+    .optional(),
   targetImageSize: z.number().positive().optional(),
   pageSize: z.enum(["square", "us-letter"]).optional(),
   pageCount: z.number().int().min(4).max(200).optional(),
@@ -45,6 +55,9 @@ export async function POST(request: NextRequest) {
       ...payload,
       fullFactUploadedFontBytes: payload.fullFactUploadedFont
         ? new Uint8Array(Buffer.from(payload.fullFactUploadedFont.bytesBase64, "base64"))
+        : undefined,
+      fullFactTitleUploadedFontBytes: payload.fullFactTitleUploadedFont
+        ? new Uint8Array(Buffer.from(payload.fullFactTitleUploadedFont.bytesBase64, "base64"))
         : undefined,
     };
     const outputBytes = await generateBook(normalizedPayload);

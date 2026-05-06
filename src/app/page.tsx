@@ -25,12 +25,20 @@ export default async function HomePage() {
     <main className="min-h-screen bg-zinc-50 py-12">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4">
         <header className="relative flex flex-col items-center gap-3 text-center">
-          <Link
-            href="/compressor"
-            className="absolute right-0 top-0 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
-          >
-            Compressor
-          </Link>
+          <div className="flex w-full justify-end gap-2 sm:absolute sm:right-0 sm:top-0 sm:w-auto">
+            <Link
+              href="/metadata"
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+            >
+              Metadata
+            </Link>
+            <Link
+              href="/compressor"
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+            >
+              Compressor
+            </Link>
+          </div>
           <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
             Picture Book Studio
           </p>

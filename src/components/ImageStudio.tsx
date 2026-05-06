@@ -108,6 +108,8 @@ interface ImageStudioProps {
   defaultLimit?: number;
 }
 
+type ResultsView = "keyword" | "provider";
+
 interface ProviderStatus {
   provider: string;
   count: number;
@@ -168,6 +170,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
   const [downloadingRootZip, setDownloadingRootZip] = useState(false);
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
   const [minPixelsInput, setMinPixelsInput] = useState("");
+  const [resultsView, setResultsView] = useState<ResultsView>("keyword");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
   const [serverProviderSupport, setServerProviderSupport] = useState<Record<ProviderValue, boolean> | null>(null);
@@ -872,10 +875,34 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         )}
         {totalCandidates > 0 && (
           <div className="space-y-6">
-            <p className="text-sm font-medium text-zinc-700">
-              Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
-            </p>
-            <div className="grid gap-6 xl:grid-cols-2">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium text-zinc-700">
+                Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
+              </p>
+              <div className="inline-flex w-fit rounded-lg border border-zinc-200 bg-white p-1">
+                <button
+                  type="button"
+                  onClick={() => setResultsView("keyword")}
+                  aria-pressed={resultsView === "keyword"}
+                  className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
+                    resultsView === "keyword" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
+                  }`}
+                >
+                  Grouped by keyword
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setResultsView("provider")}
+                  aria-pressed={resultsView === "provider"}
+                  className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
+                    resultsView === "provider" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
+                  }`}
+                >
+                  Grouped by provider
+                </button>
+              </div>
+            </div>
+            {resultsView === "provider" ? (
               <div className="space-y-3">
                 <h5 className="text-sm font-semibold text-zinc-800">Grouped by provider</h5>
                 {providerBuckets.length === 0 && <p className="text-xs text-zinc-500">No providers returned images yet.</p>}
@@ -910,6 +937,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
                   );
                 })}
               </div>
+            ) : (
               <div className="space-y-3">
                 <h5 className="text-sm font-semibold text-zinc-800">Grouped by keyword</h5>
                 {keywordGroups.map((group, groupIndex) => {
@@ -947,7 +975,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
                   );
                 })}
               </div>
-            </div>
+            )}
           </div>
         )}
         {saveMessage && (

@@ -5,7 +5,7 @@ import { renderFullFactBook } from "./render-full-fact";
 import { renderDictionaryBook } from "./render-dictionary";
 import { hexToRgb } from "./colors";
 import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
-import { FACT_STYLE, type TextAlignment } from "./types";
+import { FACT_STYLE, TITLE_STYLE, type TextAlignment } from "./types";
 
 export type BookMode =
   | "facts"
@@ -14,6 +14,8 @@ export type BookMode =
   | "list-description"
   | "list-description-even"
   | "described-pictures"
+  | "even-described-pictures"
+  | "fully-described-images"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -31,6 +33,8 @@ export interface GenerateBookPayload {
   factsPerPage?: number;
   fullFactBoxFontId?: string;
   fullFactUploadedFontBytes?: Uint8Array;
+  fullFactTitleFontId?: string;
+  fullFactTitleUploadedFontBytes?: Uint8Array;
   targetImageSize?: number;
   pageSize?: PageSizePreset;
   pageCount?: number;
@@ -158,6 +162,89 @@ export async function generateBook(payload: GenerateBookPayload) {
           roundness: 14,
           opacity,
         },
+        boxTextFontId: payload.fullFactBoxFontId,
+        boxTextFontBytes: payload.fullFactUploadedFontBytes,
+        ...sharedPageOptions,
+      });
+    }
+    case "even-described-pictures": {
+      const entries = parseListInput(payload.list ?? "");
+      return renderBook({
+        entries,
+        placeholder: "Add picture description #{}.",
+        imageLibrary,
+        overlayOverrides: {
+          showOnEven: true,
+          showOnOdd: false,
+          showNumber: false,
+          titleStyle: null,
+          bodyStyle: {
+            ...FACT_STYLE,
+            fontSize: 17,
+            leading: 20,
+            alignment: payload.describedPictureTextAlignment ?? "center",
+          },
+          minHeight: 0.62 * 72,
+          maxHeight: pageSettings.height * 0.24,
+          fitContentWidth: true,
+          contentWidthMin: 2.3 * 72,
+          contentWidthMaxLines: 3,
+          centerHorizontally: true,
+          marginLeft: 0.7 * 72,
+          marginRight: 0.7 * 72,
+          marginBottom: 0.7 * 72,
+          maxBoxWidth: payload.describedPictureMaxBoxWidth ?? 6.2 * 72,
+          horizontalPadding: 0.26 * 72,
+          verticalPadding: 0.16 * 72,
+          roundness: 14,
+          opacity,
+        },
+        skipOverlayPageIndexes: [0, pageSettings.totalPages - 1],
+        boxTextFontId: payload.fullFactBoxFontId,
+        boxTextFontBytes: payload.fullFactUploadedFontBytes,
+        ...sharedPageOptions,
+      });
+    }
+    case "fully-described-images": {
+      const entries = parseListDescriptionInput(payload.listDescription ?? "");
+      return renderBook({
+        entries,
+        placeholder: "Add a title and description for picture #{}.",
+        imageLibrary,
+        overlayOverrides: {
+          showOnEven: true,
+          showOnOdd: true,
+          showNumber: false,
+          titleStyle: {
+            ...TITLE_STYLE,
+            fontSize: 16,
+            leading: 18,
+            alignment: "left",
+            spaceAfter: 4,
+          },
+          bodyStyle: {
+            ...FACT_STYLE,
+            fontSize: 14,
+            leading: 17,
+            alignment: "left",
+          },
+          minHeight: 0.82 * 72,
+          maxHeight: pageSettings.height * 0.28,
+          fitContentWidth: true,
+          contentWidthMin: 2.7 * 72,
+          contentWidthMaxLines: 6,
+          centerHorizontally: true,
+          marginLeft: 0.7 * 72,
+          marginRight: 0.7 * 72,
+          marginBottom: 0.7 * 72,
+          maxBoxWidth: payload.describedPictureMaxBoxWidth ?? 6.2 * 72,
+          horizontalPadding: 0.26 * 72,
+          verticalPadding: 0.18 * 72,
+          roundness: 14,
+          opacity,
+        },
+        boxTitleFontId: payload.fullFactTitleFontId,
+        boxTitleFontBytes: payload.fullFactTitleUploadedFontBytes,
         boxTextFontId: payload.fullFactBoxFontId,
         boxTextFontBytes: payload.fullFactUploadedFontBytes,
         ...sharedPageOptions,
