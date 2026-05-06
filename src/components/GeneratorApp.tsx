@@ -1415,12 +1415,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     })}
                   </div>
                 </>
-              ) : (
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold text-zinc-700">Text Alignment</p>
-                  <p className="text-xs text-zinc-500">This layout keeps the title and description left aligned.</p>
-                </div>
-              )}
+              ) : null}
               <label className="flex flex-col gap-2 sm:max-w-xs">
                 <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
                 <input
