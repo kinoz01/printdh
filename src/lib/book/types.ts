@@ -81,6 +81,9 @@ export interface OverlayConfig {
   centerHorizontally: boolean;
   centerTextVertically: boolean;
   textOffsetTop: number;
+  bodyPreserveLineBreaks: boolean;
+  bodyParagraphSpacing: number;
+  bodyInterpretMarkdown: boolean;
 }
 
 export type PdfImageMimeType = "image/png" | "image/jpeg";

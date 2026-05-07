@@ -60,6 +60,12 @@ const MODES = [
     description: "A left-aligned title and description sit together inside each image caption box.",
     accent: "from-amber-200 via-orange-100 to-stone-100",
   },
+  {
+    value: "even-full-page-text",
+    label: "Even Full Page Text",
+    description: "A centered 7 × 7 in text box appears on even pages with a title above the paragraph.",
+    accent: "from-slate-200 via-stone-100 to-zinc-200",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
@@ -89,6 +95,7 @@ type ModeValue =
   | "described-pictures"
   | "even-described-pictures"
   | "fully-described-images"
+  | "even-full-page-text"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -97,7 +104,7 @@ const DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH = 6.2;
 const DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH = 7;
 
 function getDefaultDescribedPictureMaxBoxWidth(mode: ModeValue) {
-  return mode === "fully-described-images"
+  return mode === "fully-described-images" || mode === "even-full-page-text"
     ? DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH
     : DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH;
 }
@@ -471,6 +478,271 @@ const FULLY_DESCRIBED_IMAGES_PLACEHOLDER = `[
   }
 ]`;
 
+const EVEN_FULL_PAGE_TEXT_SAMPLE_WINTER_SPORTS = JSON.stringify(
+  [
+    {
+      title: "Alpine Skiing",
+      description:
+        "1. Alpine skiing, also known as downhill skiing, originated in the European Alps in the mid-19th century and has since become one of the most popular winter sports worldwide.\n2. The sport involves sliding down snow-covered slopes on skis with fixed-heel bindings, unlike other types of skiing where the heel is free.\n3. Alpine skiing made its Olympic debut at the 1936 Winter Games in Garmisch-Partenkirchen, Germany, featuring a combined event of downhill and slalom.\n4. Competitors leverage gravity to reach speeds exceeding 130 km/h (80 mph) in the downhill event, requiring immense physical strength and focus.\n5. The sport is divided into speed events (Downhill and Super-G) and technical events (Slalom and Giant Slalom), each requiring different skill sets.\n6. Ski bindings are designed to release the boot in the event of a fall to minimize injury, a crucial safety innovation developed over decades.\n7. Modern skis are shaped with a sidecut (hourglass shape) to facilitate easier turning, a revolution known as 'parabolic skis' introduced in the 1990s.\n8. The Hahnenkamm race in Kitzbuhel, Austria, is considered the most challenging and dangerous downhill course on the World Cup circuit.\n9. Alpine skiing requires significant leg strength, particularly in the quadriceps and hamstrings, to maintain control and absorb shocks from the terrain.\n10. Artificial snow is often used in major competitions to ensure a consistent and hard surface, which, while safer for racers, is much icier than recreational snow.\n11. Racers wear skin-tight suits to reduce aerodynamic drag, which can make a difference of hundredths of a second in race times.\n12. Gatekeepers are officials positioned along the course to ensure that skiers pass through all the gates correctly; missing a gate results in disqualification.\n13. The 'tuck' position constitutes the most aerodynamic stance in skiing, where the skier squats low and keeps arms close to the body.\n14. Alpine skiing has a rich culture of 'apres-ski,' referring to the socializing and nightlife that takes place at ski resorts after a day on the slopes.\n15. Climate change poses a significant threat to the future of alpine skiing, with receding glaciers and shorter winters impacting ski resorts globally.",
+    },
+    {
+      title: "Biathlon",
+      description:
+        "1. Biathlon is a unique winter sport that combines cross-country skiing with rifle shooting, demanding both immense cardiovascular endurance and extreme precision.\n2. The sport has its roots in survival skills practiced by Scandinavian hunters and soldiers who skied with weapons to defend their territories.\n3. Biathletes must lower their heart rate rapidly upon entering the shooting range to steady their aim, despite just having skied at maximum effort.\n4. A standard biathlon rifle weighs at least 3.5 kg and uses .22 caliber ammunition, which is fired at targets 50 meters away.\n5. In the standing shooting position, the target size is 11.5 cm in diameter, while in the prone position, it shrinks to a tiny 4.5 cm.\n6. For every missed target, athletes usually face a penalty, such as skiing a 150-meter penalty loop or having one minute added to their total time.\n7. Biathlon was first included in the Winter Olympics in 1960 for men, while women's biathlon was not added until the 1992 Games in Albertville.\n8. The sport is particularly popular in Germany, Russia, Norway, and France, where top athletes are national celebrities.\n9. Wind conditions play a massive role in shooting accuracy; athletes must adjust their rifle sights ('clicks') to compensate for wind direction and speed.\n10. Rifles are carried on the athlete's back using a special harness that allows for skiing without significant hindrance.\n11. The rifle stock is often custom-made to fit the athlete's body perfectly, ensuring comfort and stability during the shooting phase.\n12. Biathletes do not use telescopic sights; they rely on aperture sights (peep sights) which require excellent vision and focus.\n13. The transition time between skiing and shooting is critical; athletes practice entering the range and getting into position to shave off seconds.\n14. There are several event formats, including Sprint, Pursuit, Individual, Mass Start, and Relays, each with different distances and shooting sequences.\n15. Biathlon training involves roller skiing in the summer months to maintain fitness and refine technique without snow.",
+    },
+    {
+      title: "Bobsleigh",
+      description:
+        "1. Bobsleigh is a high-speed winter sport where teams of two or four make timed runs down narrow, twisting, banked, iced tracks in a gravity-powered sled.\n2. The sport originated in Switzerland in the late 19th century when hotel guests began racing sleds down icy roads in St. Moritz.\n3. Bobsleds can reach speeds of over 150 km/h (93 mph), and crews can experience G-forces up to 5G in tight curves.\n4. The start is the most critical part of the race; athletes must push the heavy sled in unison for about 50 meters before jumping in.\n5. The driver steers the sled using precise movements of a steering mechanism connected to the front runners, while the brakeman stops the sled after the finish line.\n6. In a four-man bobsleigh, the two middle crew members are primarily pushers who add weight and mass to the sled for higher speeds.\n7. Aerodynamics are crucial; sleds are wind-tunnel tested, and athletes wear sleek suits and helmets to minimize air resistance.\n8. The total weight of the sled and crew is strictly regulated; lighter teams often add lead weights to reach the maximum limit for competitive equality.\n9. Bobsleigh tracks are constructed of concrete and covered with ice; they must be maintained meticulously to ensure a smooth and safe surface.\n10. The 'death spiral' is a famous 360-degree turn found on some tracks, testing the crew's ability to withstand immense centrifugal force.\n11. Women's bobsleigh was introduced to the Winter Olympics in 2002 with a two-woman event, and a monobob (single person) event was added in 2022.\n12. The Jamaican bobsleigh team famously debuted at the 1988 Calgary Olympics, inspiring the popular film 'Cool Runnings'.\n13. Sled runners are made of steel and are polished to a mirror finish to reduce friction with the ice; their temperature is also regulated before races.\n14. Communication between the driver and brakeman is limited during the run due to the deafening noise and intense concentration required.\n15. Crashes in bobsleigh are dangerous and can result in the sled overturning and sliding on the athletes' helmets or shoulders at high speeds.",
+    },
+  ],
+  null,
+  2
+);
+
+const EVEN_FULL_PAGE_TEXT_SAMPLE_COFFEE = JSON.stringify(
+  [
+    {
+      title: "Virgin Espresso Martini",
+      description:
+        "**Intro:** Virgin Espresso Martini keeps the elegant look and bold coffee flavor of the classic espresso martini, but uses espresso, cold brew concentrate, and syrup instead of alcohol. It is cold, frothy, rich, and ideal for a non-alcoholic after-dinner coffee drink.\n\n**Ingredients:**\n- 1 shot fresh espresso, cooled\n- 1 oz cold brew concentrate\n- 0.5 oz vanilla syrup\n- 0.5 oz simple syrup, optional\n- Ice\n- 3 whole coffee beans for garnish\n\n**Instructions:**\n1. Brew a fresh espresso shot and let it cool for a few minutes so it does not melt the ice too quickly.\n2. Add the cooled espresso, cold brew concentrate, vanilla syrup, simple syrup, and ice to a cocktail shaker.\n3. Shake hard for 15-20 seconds until the outside of the shaker feels cold and the drink becomes foamy.\n4. Double strain into a chilled coupe or martini glass to remove small ice pieces and create a smooth texture.\n5. Garnish with 3 whole coffee beans on the foam.\n\n**Serving note:** Use strong espresso and shake aggressively because the foam is what gives this drink its elegant cocktail-style finish.",
+    },
+    {
+      title: "Creamy Irish Coffee Mocktail",
+      description:
+        "**Intro:** Creamy Irish Coffee Mocktail is a warm and comforting alcohol-free version of Irish coffee. It uses hot coffee, brown sugar, vanilla, and lightly whipped cream to create a rich layered drink without whiskey.\n\n**Ingredients:**\n- 1 cup freshly brewed hot coffee\n- 1-2 tsp brown sugar\n- 0.25 tsp vanilla extract\n- 1-2 tbsp lightly whipped heavy cream\n- Optional: small pinch of cinnamon\n\n**Instructions:**\n1. Warm the glass or mug by filling it with hot water for 30 seconds, then discard the water.\n2. Add brown sugar and vanilla extract to the warm glass.\n3. Pour in the hot coffee and stir until the sugar fully dissolves.\n4. Lightly whip the cream until it thickens but is still pourable.\n5. Pour the cream gently over the back of a spoon so it floats on top of the coffee.\n6. Add a small pinch of cinnamon if desired.\n\n**Serving note:** Do not stir the cream into the drink; sip the hot coffee through the cool cream for the traditional layered experience.",
+    },
+    {
+      title: "Spanish Coffee Mocktail",
+      description:
+        "**Intro:** Spanish Coffee Mocktail is a warm, dramatic coffee drink with a sugared rim, caramel, cinnamon, orange zest, and strong brewed coffee. It keeps the cozy dessert feeling of Spanish coffee without rum, brandy, or liqueur.\n\n**Ingredients:**\n- 1 cup freshly brewed hot coffee\n- 1 tbsp granulated sugar for the rim\n- 0.5 oz caramel syrup\n- 0.25 tsp cinnamon\n- Orange zest for garnish\n- Optional: whipped cream\n\n**Instructions:**\n1. Choose a heatproof glass or mug.\n2. Moisten the rim with orange peel, orange juice, or a little water.\n3. Dip the rim into granulated sugar until evenly coated.\n4. Add caramel syrup and cinnamon to the glass.\n5. Pour in freshly brewed hot coffee and stir gently until the syrup blends into the coffee.\n6. Top with whipped cream if desired.\n7. Finish with orange zest for aroma and presentation.\n\n**Serving note:** The sugared rim gives the drink a dessert-like first sip, while orange zest adds brightness to the warm coffee.",
+    },
+    {
+      title: "White Russian Coffee Mocktail",
+      description:
+        "**Intro:** White Russian Coffee Mocktail is creamy, cold, and dessert-like. It replaces vodka and coffee liqueur with cold brew, coffee syrup, and cream, giving the same smooth style without alcohol.\n\n**Ingredients:**\n- 3 oz cold brew coffee\n- 1 oz coffee syrup or strong sweetened espresso\n- 1 oz heavy cream or milk\n- Ice\n- Optional: chocolate shavings\n\n**Instructions:**\n1. Fill a rocks glass with ice cubes.\n2. Pour the cold brew coffee over the ice.\n3. Add coffee syrup or strong sweetened espresso for a deeper coffee flavor.\n4. Slowly pour the cream over the top to create a layered look.\n5. Stir gently if you prefer a fully mixed drink.\n6. Garnish with chocolate shavings if desired.\n\n**Serving note:** Heavy cream creates a richer drink, while milk makes it lighter and easier to sip.",
+    },
+    {
+      title: "Black Russian Coffee Mocktail",
+      description:
+        "**Intro:** Black Russian Coffee Mocktail is a dark, simple, coffee-forward drink served over ice. It keeps the bold look of the original cocktail but uses cold brew and coffee syrup instead of vodka and liqueur.\n\n**Ingredients:**\n- 4 oz cold brew coffee\n- 1 oz coffee syrup\n- 0.25 oz simple syrup, optional\n- Ice\n- Optional: orange peel\n\n**Instructions:**\n1. Fill a rocks glass with fresh ice.\n2. Pour in the cold brew coffee.\n3. Add coffee syrup and stir gently.\n4. Taste the drink and add simple syrup only if you want more sweetness.\n5. Stir again for 10-15 seconds to chill and balance the drink.\n6. Garnish with orange peel for a light citrus aroma.\n\n**Taste note:** This drink is stronger and darker because it contains no milk or cream, making it a good option for people who like black coffee.",
+    },
+    {
+      title: "Cold Brew Citrus Spritz",
+      description:
+        "**Intro:** Cold Brew Citrus Spritz is a refreshing coffee mocktail with cold brew, orange juice, lemon juice, syrup, and sparkling water. It is light, bright, and suitable for warm afternoons or brunch.\n\n**Ingredients:**\n- 2 oz cold brew coffee\n- 1 oz orange juice\n- 0.5 oz lemon juice\n- 0.5 oz simple syrup\n- Sparkling water to top\n- Ice\n- Orange slice for garnish\n\n**Instructions:**\n1. Fill a tall glass with ice.\n2. Add cold brew coffee, orange juice, lemon juice, and simple syrup.\n3. Stir gently for a few seconds so the citrus and coffee combine.\n4. Top with sparkling water to add fizz.\n5. Stir once more very lightly so the drink stays bubbly.\n6. Garnish with an orange slice.\n\n**Serving note:** A smooth cold brew works best because too much bitterness can clash with the citrus.",
+    },
+    {
+      title: "Almond Coffee Cream",
+      description:
+        "**Intro:** Almond Coffee Cream is a warm and nutty alcohol-free coffee drink inspired by amaretto-style flavors. Almond extract, hot coffee, brown sugar, and whipped cream create a sweet cafe-style dessert drink.\n\n**Ingredients:**\n- 1 cup hot brewed coffee\n- 0.25 tsp almond extract\n- 1-2 tsp brown sugar or honey\n- Whipped cream for topping\n- Optional: sliced almonds or cocoa powder\n\n**Instructions:**\n1. Brew a fresh cup of hot coffee using a medium or dark roast.\n2. Add almond extract and brown sugar or honey to a mug.\n3. Pour the hot coffee into the mug and stir until the sweetener dissolves.\n4. Taste and adjust sweetness if needed.\n5. Top with whipped cream.\n6. Garnish with sliced almonds or a light dusting of cocoa powder.\n\n**Tip:** Almond extract is strong, so start with a small amount and add more only if needed.",
+    },
+    {
+      title: "Coffee Old Fashioned Mocktail",
+      description:
+        "**Intro:** Coffee Old Fashioned Mocktail is a slow-sipping alcohol-free drink with cold brew, orange peel, demerara syrup, cinnamon, and ice. It gives a deep, aromatic flavor without using whiskey.\n\n**Ingredients:**\n- 3 oz cold brew coffee\n- 0.5 oz demerara syrup or brown sugar syrup\n- 1 small strip orange peel\n- 1 tiny pinch cinnamon\n- Ice\n- Coffee beans for garnish\n\n**Instructions:**\n1. Add demerara syrup, orange peel, and cinnamon to a rocks glass.\n2. Press the orange peel gently with a spoon to release its oils.\n3. Add one large ice cube or several smaller ice cubes.\n4. Pour the cold brew coffee over the ice.\n5. Stir slowly for 20-30 seconds to chill and slightly dilute the drink.\n6. Garnish with a few coffee beans.\n\n**Taste note:** Demerara syrup gives a deeper caramel-like flavor than plain simple syrup.",
+    },
+    {
+      title: "Siciliano Coffee Spritz Mocktail",
+      description:
+        "**Intro:** Siciliano Coffee Spritz Mocktail is a light sparkling coffee drink with cold brew, white grape juice, lemon, coffee syrup, and club soda. It is designed to feel like an aperitif-style drink without alcohol.\n\n**Ingredients:**\n- 2 oz cold brew coffee\n- 1 oz white grape juice\n- 0.5 oz lemon juice\n- 0.5 oz coffee syrup\n- Club soda to top\n- Ice\n- Orange twist for garnish\n\n**Instructions:**\n1. Fill a rocks or highball glass with ice.\n2. Add cold brew coffee, white grape juice, lemon juice, and coffee syrup.\n3. Stir gently until the base is mixed.\n4. Top with club soda for a light sparkling finish.\n5. Stir once, carefully, to avoid losing too much fizz.\n6. Garnish with an orange twist.\n\n**Serving note:** White grape juice adds gentle sweetness and helps replace the fruit-like character usually found in aperitif drinks.",
+    },
+    {
+      title: "Chocolate Mudslide Coffee",
+      description:
+        "**Intro:** Chocolate Mudslide Coffee is a rich frozen-style coffee dessert drink. It keeps the creamy mood of a mudslide but uses espresso, chocolate, milk, and ice cream instead of liqueurs.\n\n**Ingredients:**\n- 1 shot espresso, cooled\n- 0.5 cup milk\n- 1 scoop vanilla ice cream\n- 1 tbsp chocolate syrup\n- Ice\n- Optional: whipped cream\n\n**Instructions:**\n1. Brew espresso and let it cool completely.\n2. Add cooled espresso, milk, vanilla ice cream, chocolate syrup, and ice to a blender.\n3. Blend until smooth and creamy.\n4. If the drink is too thin, add more ice cream or ice and blend again.\n5. Pour into a chilled glass.\n6. Top with whipped cream and drizzle with extra chocolate syrup if desired.\n\n**Tip:** For a thicker dessert drink, use less milk and add an extra half scoop of ice cream.",
+    },
+    {
+      title: "Mint Espresso Cooler",
+      description:
+        "**Intro:** Mint Espresso Cooler is a bright iced coffee drink with espresso, mint, syrup, and sparkling water. It is fresh, aromatic, and lighter than cream-based coffee drinks.\n\n**Ingredients:**\n- 1 shot espresso, cooled\n- 6-8 fresh mint leaves\n- 0.5 oz simple syrup\n- Sparkling water to top\n- Ice\n- Mint sprig for garnish\n\n**Instructions:**\n1. Place mint leaves and simple syrup in a glass.\n2. Press the mint gently with a spoon to release its aroma.\n3. Add ice to the glass.\n4. Pour in the cooled espresso.\n5. Top with sparkling water.\n6. Stir gently and garnish with a fresh mint sprig.\n\n**Flavor note:** Do not crush the mint too hard because broken mint leaves can make the drink taste bitter.",
+    },
+    {
+      title: "Pineapple Cold Brew Cooler",
+      description:
+        "**Intro:** Pineapple Cold Brew Cooler is a tropical coffee mocktail with cold brew, pineapple juice, lime juice, and simple syrup. It is fruity, bright, and surprisingly balanced.\n\n**Ingredients:**\n- 2 oz cold brew coffee\n- 2 oz pineapple juice\n- 0.5 oz fresh lime juice\n- 0.5 oz simple syrup\n- Ice\n- Pineapple wedge or lime wheel for garnish\n\n**Instructions:**\n1. Add cold brew coffee, pineapple juice, lime juice, simple syrup, and ice to a shaker.\n2. Shake for 10-15 seconds until the mixture is cold.\n3. Strain into a rocks glass filled with fresh ice.\n4. Taste and add a little more lime if you want extra sharpness.\n5. Garnish with a pineapple wedge or lime wheel.\n6. Serve immediately while cold.\n\n**Taste note:** Pineapple adds sweetness while lime keeps the drink sharp and refreshing.",
+    },
+    {
+      title: "Espresso Tonic",
+      description:
+        "**Intro:** Espresso Tonic is a crisp and modern coffee drink made with chilled tonic water and espresso. It is fizzy, slightly bitter, and refreshing, especially when served over plenty of ice.\n\n**Ingredients:**\n- 1 shot espresso, slightly cooled\n- 4 oz chilled tonic water\n- Ice\n- Lemon or orange wedge for garnish\n\n**Instructions:**\n1. Brew one shot of espresso and let it cool for a short time.\n2. Fill a tall glass with ice.\n3. Pour chilled tonic water into the glass first.\n4. Slowly pour the espresso over the tonic to create a layered effect.\n5. Garnish with a lemon or orange wedge.\n6. Stir gently before drinking if you prefer a blended flavor.\n\n**Tip:** Pour the espresso slowly over the ice or the back of a spoon to reduce foaming and keep the layers cleaner.",
+    },
+    {
+      title: "Cherry Espresso Fizz",
+      description:
+        "**Intro:** Cherry Espresso Fizz is a fruity coffee mocktail with cherry juice, espresso, lemon, and sparkling water. It has a deep red color and a sweet-tart flavor that works well with roasted coffee notes.\n\n**Ingredients:**\n- 1 shot espresso, cooled\n- 2 oz cherry juice\n- 0.5 oz lemon juice\n- 0.5 oz simple syrup, optional\n- Sparkling water to top\n- Ice\n- Cherry or lemon peel for garnish\n\n**Instructions:**\n1. Fill a glass with ice.\n2. Add cherry juice, lemon juice, simple syrup, and cooled espresso.\n3. Stir gently until the coffee and fruit juice combine.\n4. Top with sparkling water.\n5. Stir once more very lightly.\n6. Garnish with a cherry or lemon peel.\n\n**Tip:** Use tart cherry juice if you want a sharper drink, or sweet cherry juice if you want a softer dessert-style flavor.",
+    },
+    {
+      title: "Classic Affogato",
+      description:
+        "**Intro:** Classic Affogato is a simple Italian-style coffee dessert made with hot espresso poured over vanilla gelato or ice cream. It is creamy, bold, and ready in minutes.\n\n**Ingredients:**\n- 1 scoop vanilla gelato or ice cream\n- 1 shot hot espresso\n- Optional: shaved chocolate or crushed nuts\n\n**Instructions:**\n1. Place one scoop of vanilla gelato or ice cream in a small glass or dessert cup.\n2. Brew a fresh hot espresso shot.\n3. Pour the espresso directly over the gelato while it is still hot.\n4. Add shaved chocolate or crushed nuts if desired.\n5. Serve immediately with a spoon before the gelato melts completely.\n\n**Serving note:** The contrast between hot espresso and cold gelato is the main pleasure of this dessert.",
+    },
+    {
+      title: "Orange Cinnamon Cold Brew Punch",
+      description:
+        "**Intro:** Orange Cinnamon Cold Brew Punch is a shareable alcohol-free coffee drink with cold brew, orange juice, cinnamon, citrus peel, and syrup. It works well for brunch, holidays, or family gatherings.\n\n**Ingredients:**\n- 2 cups cold brew coffee\n- 1 cup fresh orange juice\n- 0.5 cup simple syrup\n- 2 strips orange peel\n- 2 cinnamon sticks\n- Ice\n- Orange slices for garnish\n\n**Instructions:**\n1. Add orange peel, cinnamon sticks, and simple syrup to a pitcher.\n2. Let the mixture sit for 20-30 minutes so the syrup absorbs the citrus and cinnamon flavor.\n3. Add cold brew coffee and fresh orange juice.\n4. Stir well and taste for sweetness.\n5. Chill in the refrigerator until ready to serve.\n6. Serve over ice and garnish with orange slices.\n\n**Tip:** Prepare it shortly before serving so the orange juice keeps its fresh flavor.",
+    },
+    {
+      title: "Espresso Milk Punch Mocktail",
+      description:
+        "**Intro:** Espresso Milk Punch Mocktail is a creamy chilled coffee drink with espresso, milk, syrup, vanilla, and nutmeg. It is smooth, comforting, and lightly frothy.\n\n**Ingredients:**\n- 1 shot espresso, cooled\n- 1 cup whole milk or half-and-half\n- 0.5 oz simple syrup\n- 0.25 tsp vanilla extract\n- Ice\n- Grated nutmeg or cocoa powder for garnish\n\n**Instructions:**\n1. Brew one shot of espresso and let it cool completely.\n2. Add cooled espresso, milk or half-and-half, simple syrup, vanilla, and ice to a shaker.\n3. Shake hard for about 15 seconds until chilled and lightly frothy.\n4. Strain into a rocks glass filled with fresh ice.\n5. Garnish with grated nutmeg or cocoa powder.\n6. Serve cold.\n\n**Tip:** Half-and-half makes the drink richer, while whole milk keeps it lighter and more drinkable.",
+    },
+    {
+      title: "Basil Pineapple Coffee Fizz",
+      description:
+        "**Intro:** Basil Pineapple Coffee Fizz is a tropical alcohol-free coffee drink with coffee concentrate, pineapple juice, lime juice, basil, and club soda. It is unusual, bright, and refreshing.\n\n**Ingredients:**\n- 2 oz coffee concentrate or strong cold brew\n- 1 oz pineapple juice\n- 0.5 oz lime juice\n- 0.5 oz simple syrup\n- Club soda to top\n- Ice\n- 3 fresh basil leaves for garnish\n\n**Instructions:**\n1. Add coffee concentrate, pineapple juice, lime juice, simple syrup, and ice to a shaker.\n2. Shake for 10-15 seconds until the mixture is cold.\n3. Strain into a tall glass filled with fresh ice.\n4. Top with club soda.\n5. Gently clap the basil leaves between your hands to release aroma, then place them on top.\n6. Serve immediately.\n\n**Taste note:** Basil adds a fresh herbal aroma that works well with pineapple and coffee.",
+    },
+    {
+      title: "Ginger Stout-Style Cold Brew",
+      description:
+        "**Intro:** Ginger Stout-Style Cold Brew is a dark and spicy alcohol-free coffee drink inspired by roasted stout flavors. Coffee, ginger syrup, brown sugar, cocoa, and sparkling water create depth without beer or whiskey.\n\n**Ingredients:**\n- 3 oz cold brew coffee\n- 0.75 oz ginger brown sugar syrup\n- 1 oz sparkling water\n- Ice\n- Optional: pinch of cocoa powder\n\n**Instructions:**\n1. Prepare ginger brown sugar syrup by mixing strong ginger tea or ginger juice with brown sugar.\n2. Fill a rocks glass with ice.\n3. Add cold brew coffee and ginger brown sugar syrup.\n4. Stir until the drink is chilled and balanced.\n5. Top with sparkling water.\n6. Add a tiny pinch of cocoa powder if desired.\n\n**Tip:** Cocoa powder adds a roasted note that gives the drink a darker, stout-like character without using beer.",
+    },
+    {
+      title: "Affogato Cream Martini Mocktail",
+      description:
+        "**Intro:** Affogato Cream Martini Mocktail is a dessert-style drink served in a martini glass with espresso, cream, coffee syrup, and vanilla gelato. It feels elegant and special without any alcohol.\n\n**Ingredients:**\n- 1 shot espresso, cooled\n- 1 oz coffee syrup\n- 1 oz heavy cream or milk\n- 1 small scoop vanilla gelato\n- Ice\n- Coffee beans or cocoa powder for garnish\n\n**Instructions:**\n1. Place a small scoop of vanilla gelato in a chilled martini glass.\n2. Add cooled espresso, coffee syrup, cream, and ice to a shaker.\n3. Shake for a few seconds until the mixture is cold and lightly frothy.\n4. Strain the mixture over the gelato.\n5. Garnish with coffee beans or a light dusting of cocoa powder.\n6. Serve immediately before the gelato melts too much.\n\n**Serving note:** It works as both a mocktail and a small coffee dessert.",
+    },
+  ],
+  null,
+  2
+);
+
+const EVEN_FULL_PAGE_TEXT_SAMPLE_COFFEE_COCKTAILS = JSON.stringify(
+  [
+    {
+      title: "Espresso Martini",
+      description:
+        "**Intro:** The Espresso Martini is a sleek coffee cocktail with a bold espresso base, smooth vodka, and sweet coffee liqueur. It is often served as a stylish evening drink, a dinner-party cocktail, or a rich after-dinner treat.\n\n**Ingredients:**\n- 1 shot fresh espresso, cooled slightly\n- 2 oz vodka\n- 1.5 oz coffee liqueur\n- 0.5 oz simple syrup, optional\n- Ice\n- 3 whole coffee beans for garnish\n\n**Instructions:**\n1. Brew a fresh shot of espresso and let it cool for a short moment so it does not melt the ice too quickly.\n2. Add vodka, coffee liqueur, espresso, and simple syrup to a cocktail shaker.\n3. Fill the shaker with ice and shake hard for 15-20 seconds until the drink becomes cold and frothy.\n4. Double strain into a chilled martini or coupe glass for a smooth finish.\n5. Garnish with 3 coffee beans on the foam.\n\n**Tip:** *A strong espresso gives the best foam and the richest coffee flavor.*",
+    },
+    {
+      title: "Irish Coffee",
+      description:
+        "**Intro:** Irish Coffee is a warm classic made with hot coffee, Irish whiskey, brown sugar, and a soft cream layer. It is comforting, rich, and perfect for cold evenings or relaxed after-dinner moments.\n\n**Ingredients:**\n- 1 cup freshly brewed hot coffee\n- 1.5 oz Irish whiskey\n- 1-2 tsp brown sugar\n- 1-2 tbsp lightly whipped heavy cream\n\n**Instructions:**\n1. Warm the glass with hot water, then discard the water before building the drink.\n2. Add brown sugar and Irish whiskey to the warm glass.\n3. Stir until the sugar dissolves fully.\n4. Pour in the hot coffee, leaving space at the top for the cream.\n5. Float the lightly whipped cream over the back of a spoon.\n\n**Serving note:** *Do not stir the cream into the coffee; drink through the cream for the traditional texture.*",
+    },
+    {
+      title: "Spanish Coffee",
+      description:
+        "**Intro:** Spanish Coffee is a dramatic warm cocktail with coffee, rum or brandy, coffee liqueur, and a sugared rim. Some versions are flambeed to caramelize the sugar and add a deeper toasted flavor.\n\n**Ingredients:**\n- 0.75 oz coffee liqueur\n- 0.5 oz dark rum or brandy\n- 1 cup freshly brewed hot coffee\n- 1 tbsp granulated sugar for the rim\n- Optional garnish: grated nutmeg, cinnamon, or orange zest\n\n**Instructions:**\n1. Use a heatproof glass or mug.\n2. Moisten the rim with citrus and dip it into granulated sugar.\n3. Add coffee liqueur and rum or brandy to the glass.\n4. Carefully flambe the spirits if desired, then extinguish by pouring in hot coffee.\n5. Garnish with nutmeg, cinnamon, or orange zest.\n\n**Safety note:** *Only flambe if you are comfortable handling flame and always use a heatproof glass.*",
+    },
+    {
+      title: "White Russian",
+      description:
+        "**Intro:** The White Russian is a creamy coffee cocktail made with vodka, coffee liqueur, and cream. It has a dessert-like character and is usually served slowly over ice.\n\n**Ingredients:**\n- 1.5 oz vodka\n- 1 oz coffee liqueur\n- 1 oz heavy cream or milk\n- Ice\n\n**Instructions:**\n1. Fill a rocks glass with ice cubes.\n2. Pour vodka over the ice.\n3. Add coffee liqueur.\n4. Slowly pour cream over the top for a layered look.\n5. Stir gently if you prefer a fully mixed drink.\n\n**Tip:** *Heavy cream makes it richer, while milk gives a lighter version.*",
+    },
+    {
+      title: "Black Russian",
+      description:
+        "**Intro:** The Black Russian is simple, bold, and coffee-forward. It uses only vodka and coffee liqueur, making it an easy cocktail for people who enjoy dark, strong flavors without cream.\n\n**Ingredients:**\n- 1.5 oz vodka\n- 1 oz coffee liqueur\n- Ice\n\n**Instructions:**\n1. Fill a rocks glass with ice.\n2. Pour vodka over the ice.\n3. Add coffee liqueur.\n4. Stir gently until the drink is well combined.\n5. Serve immediately.\n\n**Taste note:** *It is stronger and sharper than a White Russian because there is no cream to soften it.*",
+    },
+    {
+      title: "Cold Brew Negroni",
+      description:
+        "**Intro:** The Cold Brew Negroni is a modern variation of the classic Negroni. Instead of gin, it uses cold brew coffee to create a bittersweet, smooth, and aromatic drink.\n\n**Ingredients:**\n- 1 oz cold brew coffee\n- 1 oz Campari\n- 1 oz sweet vermouth\n- Ice\n- Orange twist or orange slice for garnish\n\n**Instructions:**\n1. Fill a mixing glass with ice.\n2. Add cold brew coffee, Campari, and sweet vermouth.\n3. Stir for 20-30 seconds until chilled and lightly diluted.\n4. Strain into a rocks glass filled with fresh ice.\n5. Garnish with an orange twist or slice.\n\n**Tip:** *Use a smooth cold brew so the bitterness stays balanced rather than harsh.*",
+    },
+    {
+      title: "Amaretto Coffee",
+      description:
+        "**Intro:** Amaretto Coffee is a warm, nutty, and sweet coffee cocktail. The almond flavor of amaretto blends well with hot coffee, making it a cozy dessert-style drink.\n\n**Ingredients:**\n- 1 cup hot brewed coffee\n- 1.5 oz amaretto liqueur\n- Whipped cream for topping\n- Optional garnish: sliced almonds, cocoa powder, or chocolate shavings\n\n**Instructions:**\n1. Brew a fresh cup of hot coffee.\n2. Pour amaretto into a heatproof mug or glass.\n3. Add the hot coffee and stir gently.\n4. Top with whipped cream.\n5. Garnish with almonds, cocoa powder, or chocolate shavings if desired.\n\n**Tip:** *A medium or dark roast works well because it balances the sweetness of the liqueur.*",
+    },
+    {
+      title: "Coffee Old Fashioned",
+      description:
+        "**Intro:** The Coffee Old Fashioned gives the classic whiskey cocktail a caffeinated twist. Coffee adds depth, while bitters and syrup keep the drink balanced and aromatic.\n\n**Ingredients:**\n- 2 oz bourbon or rye whiskey\n- 1 oz cold brew coffee or cooled espresso\n- 0.25 oz simple syrup\n- 2 dashes Angostura bitters\n- Ice\n- Orange twist and coffee beans for garnish\n\n**Instructions:**\n1. Place a large ice cube in a rocks glass.\n2. Add whiskey, cold brew or espresso, simple syrup, and bitters.\n3. Stir for 20-30 seconds until chilled.\n4. Twist orange peel over the glass to release the oils.\n5. Garnish with the orange peel and a few coffee beans.\n\n**Taste note:** *Bourbon makes it rounder and sweeter, while rye gives a spicier finish.*",
+    },
+    {
+      title: "Siciliano",
+      description:
+        "**Intro:** The Siciliano is a light and bittersweet coffee cocktail with cold brew, sweet vermouth, coffee liqueur, and sparkling water. It feels refreshing while still keeping a complex coffee flavor.\n\n**Ingredients:**\n- 2 oz cold brew coffee\n- 1.5 oz sweet vermouth\n- 0.5 oz coffee liqueur\n- 1 oz sparkling water or club soda\n- Ice\n- Orange twist for garnish\n\n**Instructions:**\n1. Fill a rocks or highball glass with ice.\n2. Add cold brew coffee, sweet vermouth, and coffee liqueur.\n3. Top with sparkling water or club soda.\n4. Stir gently so the fizz remains fresh.\n5. Garnish with an orange twist.\n\n**Tip:** *Serve it before dinner as a lighter coffee aperitif.*",
+    },
+    {
+      title: "Mudslide",
+      description:
+        "**Intro:** The Mudslide is a creamy dessert cocktail that combines vodka, coffee liqueur, and Irish cream. It is rich, smooth, and often served as a sweet after-dinner drink.\n\n**Ingredients:**\n- 1 oz vodka\n- 1 oz coffee liqueur\n- 1 oz Irish cream liqueur\n- Ice\n- Optional: 1 oz heavy cream or milk\n\n**Instructions:**\n1. Add vodka, coffee liqueur, Irish cream, and ice to a cocktail shaker.\n2. Add heavy cream or milk if you want an extra creamy drink.\n3. Shake hard for 10-15 seconds.\n4. Strain into a glass filled with fresh ice.\n5. Serve cold.\n\n**Tip:** *For a dessert version, drizzle chocolate syrup inside the glass before pouring.*",
+    },
+    {
+      title: "Death by Morning",
+      description:
+        "**Intro:** Death by Morning is a bold coffee cocktail inspired by absinthe-based classics. It combines espresso, absinthe, minty liqueur, bitters, salt, and citrus aroma for a complex drink.\n\n**Ingredients:**\n- 0.75 oz absinthe\n- 0.5 oz Branca Menta\n- 0.5 oz coffee liqueur\n- 1.5 oz cooled espresso or cold brew concentrate\n- 1 barspoon demerara sugar\n- 1 dash Angostura bitters\n- 1 pinch coarse sea salt\n- 1 orange twist\n- Ice\n- Mint sprig for garnish\n\n**Instructions:**\n1. Brew espresso and let it cool slightly.\n2. Add absinthe, Branca Menta, coffee liqueur, espresso, sugar, bitters, salt, and ice to a shaker.\n3. Shake vigorously until very cold.\n4. Double strain into a Nick and Nora glass.\n5. Express orange peel oils over the drink, discard the peel, and garnish with mint.\n\n**Flavor note:** *The absinthe adds an herbal anise flavor, while the coffee keeps the drink dark and rich.*",
+    },
+    {
+      title: "Roman Holiday",
+      description:
+        "**Intro:** Roman Holiday is a refreshing coffee cocktail with amaro, Campari, cold brew, pineapple, lime, and demerara syrup. It has tropical brightness with a bitter coffee edge.\n\n**Ingredients:**\n- 1 oz amaro liqueur\n- 0.25 oz Campari\n- 1 oz cold brew coffee\n- 0.75 oz fresh pineapple juice\n- 0.75 oz fresh lime juice\n- 0.25 oz demerara syrup\n- 1 pinch sea salt\n- Crushed ice\n- Cinnamon stick or lime wedge for garnish\n\n**Instructions:**\n1. Add amaro, Campari, cold brew, pineapple juice, lime juice, demerara syrup, and salt to a shaker with ice.\n2. Shake for 10-15 seconds until chilled.\n3. Strain into a double rocks glass over crushed ice.\n4. Garnish with a cinnamon stick or lime wedge.\n5. Serve immediately.\n\n**Taste note:** *The pineapple and lime make it bright, while the coffee and amaro keep it deep and bittersweet.*",
+    },
+    {
+      title: "Espresso Gin and Tonic",
+      description:
+        "**Intro:** Espresso Gin and Tonic is a modern drink that mixes gin, tonic water, and espresso. It is fizzy, bitter, botanical, and surprisingly refreshing.\n\n**Ingredients:**\n- 1 oz freshly brewed espresso, slightly cooled\n- 1.5 oz gin\n- 3-4 oz chilled tonic water\n- Ice\n- Lemon wedge, lime wedge, or rosemary sprig for garnish\n\n**Instructions:**\n1. Fill a highball or rocks glass with ice.\n2. Add gin to the glass.\n3. Pour in chilled tonic water, leaving room for espresso.\n4. Slowly pour cooled espresso over the tonic for a layered look.\n5. Garnish with citrus or rosemary.\n\n**Tip:** *Stir gently only if you want the espresso fully mixed into the tonic.*",
+    },
+    {
+      title: "Kirsch au Cafe",
+      description:
+        "**Intro:** Kirsch au Cafe is a cherry and coffee cocktail with cognac, kirsch, Cherry Heering, egg white, and espresso. It is fruity, rich, and slightly creamy from the foam.\n\n**Ingredients:**\n- 1 oz cognac\n- 0.75 oz kirsch\n- 0.75 oz Cherry Heering\n- 0.5 oz simple syrup\n- 0.5 oz egg white\n- 1.5 oz espresso\n- Ice\n\n**Instructions:**\n1. Brew espresso and set it aside.\n2. Add cognac, kirsch, Cherry Heering, simple syrup, and egg white to a shaker.\n3. Dry shake without ice to build foam.\n4. Add espresso and ice, then shake again until chilled.\n5. Double strain into a cocktail glass.\n\n**Tip:** *A fruit-forward coffee works especially well because it supports the cherry notes.*",
+    },
+    {
+      title: "Irish Affogato",
+      description:
+        "**Intro:** Irish Affogato is a boozy dessert drink where hot espresso and Irish whiskey melt into vanilla gelato or ice cream. It is simple, creamy, and elegant.\n\n**Ingredients:**\n- 1 scoop vanilla gelato or ice cream\n- 1 shot hot espresso\n- 1 oz Irish whiskey\n\n**Instructions:**\n1. Place one scoop of vanilla gelato in a clear glass or mug.\n2. Drizzle Irish whiskey over the gelato.\n3. Brew a fresh hot espresso.\n4. Pour the espresso over the gelato immediately.\n5. Serve at once with a spoon.\n\n**Serving note:** *The contrast of hot espresso and cold gelato is the main pleasure of this drink.*",
+    },
+    {
+      title: "Cafe Correccion Ponche",
+      description:
+        "**Intro:** Cafe Correccion Ponche is a festive coffee rum punch made with cold brew, anejo rum, sweet vermouth, orange juice, syrup, and cinnamon. It is ideal for sharing with a group.\n\n**Ingredients:**\n- 1.5 tsp demerara sugar\n- 2 strips orange peel\n- 1.5 cups anejo rum\n- 0.5 cup sweet vermouth\n- 1 cup cold brew coffee\n- 0.5 cup fresh orange juice\n- 0.5 cup simple syrup\n- Cracked ice\n- Freshly ground cinnamon for garnish\n- 4 cinnamon sticks for garnish\n\n**Instructions:**\n1. Muddle demerara sugar with orange peels in a large bowl or pitcher to release the citrus oils.\n2. Let the mixture rest for about 1 hour.\n3. Add rum, sweet vermouth, cold brew coffee, orange juice, simple syrup, and cracked ice.\n4. Stir well, then strain into a punch bowl with a large ice block.\n5. Finish with ground cinnamon and serve with cinnamon sticks.\n\n**Tip:** *Make it shortly before serving so the citrus and coffee stay fresh.*",
+    },
+    {
+      title: "Espresso Milk Punch",
+      description:
+        "**Intro:** Espresso Milk Punch is a creamy brunch-style cocktail with espresso, bourbon or rum, chicory liqueur, milk, and syrup. It is smooth, rich, and lightly frothy.\n\n**Ingredients:**\n- 1 oz freshly brewed and cooled espresso\n- 1.5 oz bourbon or dark rum\n- 0.16 oz chicory liqueur\n- 1 oz whole milk or half-and-half\n- 0.5 oz simple syrup\n- Ice\n- Grated nutmeg or cocoa powder for garnish\n\n**Instructions:**\n1. Add cooled espresso, bourbon or rum, chicory liqueur, milk, and simple syrup to a shaker.\n2. Fill the shaker with ice.\n3. Shake vigorously for about 15 seconds until chilled and frothy.\n4. Strain into a rocks glass filled with fresh ice.\n5. Garnish with grated nutmeg or cocoa powder.\n\n**Tip:** *Half-and-half makes the drink thicker and more dessert-like.*",
+    },
+    {
+      title: "Spark and Stormy",
+      description:
+        "**Intro:** Spark and Stormy is a tropical coffee cocktail inspired by the Dark and Stormy. It combines Drambuie, mezcal, coffee concentrate, pineapple juice, and club soda.\n\n**Ingredients:**\n- 1 oz Drambuie\n- 0.5 oz mezcal\n- 2 oz coffee concentrate\n- 1 oz pineapple juice\n- Club soda to top\n- Ice\n- 3 fresh basil leaves for garnish\n\n**Instructions:**\n1. Add Drambuie, mezcal, coffee concentrate, pineapple juice, and ice to a shaker.\n2. Shake vigorously until chilled.\n3. Double strain over fresh ice in a tall glass.\n4. Top with club soda.\n5. Garnish with fresh basil leaves.\n\n**Taste note:** *Mezcal brings smoke, pineapple brings brightness, and coffee gives the drink a deep base.*",
+    },
+    {
+      title: "Eye Opener",
+      description:
+        "**Intro:** Eye Opener is a strong coffee cocktail that brings together whiskey, ginger brown sugar syrup, cold brew, and stout beer. It is bold, dark, and full of layered flavor.\n\n**Ingredients:**\n- 1.5 oz whiskey\n- 0.75 oz ginger brown sugar syrup\n- 3 oz cold brew coffee\n- 1 oz stout beer\n\n**Instructions:**\n1. Prepare ginger brown sugar syrup by blending equal parts fresh ginger juice and dark brown sugar.\n2. Add whiskey, syrup, and cold brew coffee to a mixing glass with ice.\n3. Stir until well chilled.\n4. Strain into a rocks glass.\n5. Dry shake the stout and pour it on top.\n\n**Tip:** *Use a rich stout with roasted notes so it blends naturally with the cold brew.*",
+    },
+    {
+      title: "Affogato Martini",
+      description:
+        "**Intro:** Affogato Martini is a dessert cocktail inspired by the Italian affogato. It combines espresso, vodka, coffee liqueur, Irish cream, and vanilla gelato for a creamy finish.\n\n**Ingredients:**\n- 1 shot fresh espresso, cooled\n- 1 oz vodka\n- 1 oz coffee liqueur\n- 1 oz Irish cream liqueur\n- 1 small scoop vanilla gelato\n- Ice\n\n**Instructions:**\n1. Place a small scoop of vanilla gelato in a chilled martini glass.\n2. Add cooled espresso, vodka, coffee liqueur, Irish cream, and ice to a shaker.\n3. Shake for a few seconds until chilled and frothy.\n4. Strain the cocktail over the gelato.\n5. Serve immediately.\n\n**Serving note:** *It works as both a cocktail and a small dessert.*",
+    },
+  ],
+  null,
+  2
+);
+
+const EVEN_FULL_PAGE_TEXT_SAMPLE_SPACE = JSON.stringify(
+  [
+    {
+      title: "Voyager 1",
+      description:
+        "1. Voyager 1 launched in 1977 and is the farthest human-made object from Earth.\n2. It visited Jupiter and Saturn before continuing toward interstellar space.\n3. The spacecraft carries the Golden Record, a time capsule of sounds and images from Earth.\n4. Engineers still communicate with it across billions of miles, although the signal takes many hours to travel.\n5. Its journey has reshaped how we understand the outer solar system and the boundary of the Sun's influence.",
+    },
+    {
+      title: "Europa",
+      description:
+        "1. Europa is one of Jupiter's largest moons and is covered by a bright shell of water ice.\n2. Scientists suspect a global liquid ocean may exist beneath that frozen crust.\n3. Cracks and streaks across the surface suggest the ice has shifted and refrozen many times.\n4. Because water, chemistry, and internal heat may all be present, Europa is one of the most promising places to search for life beyond Earth.\n5. Missions now focus on mapping the moon in detail and studying how thick the ice shell may be.",
+    },
+    {
+      title: "Auroras",
+      description:
+        "1. Auroras appear when charged particles from the Sun interact with gases in a planet's atmosphere.\n2. On Earth, these events are most common near the polar regions where magnetic field lines guide the particles downward.\n3. Oxygen can glow green or red, while nitrogen often produces blue or purple tones.\n4. Strong solar storms can push auroras farther from the poles and make them visible in unusual places.\n5. Beyond Earth, giant planets like Jupiter and Saturn also have powerful auroras driven by their magnetic environments.",
+    },
+  ],
+  null,
+  2
+);
+
+const EVEN_FULL_PAGE_TEXT_SAMPLES = [
+  { label: "Winter Sports", value: EVEN_FULL_PAGE_TEXT_SAMPLE_WINTER_SPORTS },
+  { label: "Coffee Guide", value: EVEN_FULL_PAGE_TEXT_SAMPLE_COFFEE },
+  { label: "Coffee Cocktails", value: EVEN_FULL_PAGE_TEXT_SAMPLE_COFFEE_COCKTAILS },
+  { label: "Space Facts", value: EVEN_FULL_PAGE_TEXT_SAMPLE_SPACE },
+] as const;
+
 export function GeneratorApp(props: GeneratorAppProps) {
   const [step, setStep] = useState<WizardStep>(1);
   const [mode, setMode] = useState<ModeValue>("full-fact");
@@ -548,7 +820,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (
       nextMode === "described-pictures" ||
       nextMode === "even-described-pictures" ||
-      nextMode === "fully-described-images"
+      nextMode === "fully-described-images" ||
+      nextMode === "even-full-page-text"
     ) {
       setDescribedPictureMaxBoxWidth(getDefaultDescribedPictureMaxBoxWidth(nextMode));
     }
@@ -633,11 +906,18 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
   const isBasicDescribedPicturesMode = ["described-pictures", "even-described-pictures"].includes(mode);
   const isFullyDescribedImagesMode = mode === "fully-described-images";
+  const isEvenFullPageTextMode = mode === "even-full-page-text";
+  const supportsSplitTitleAndParagraphFonts = isFullyDescribedImagesMode || isEvenFullPageTextMode;
   const isCaptionBoxMode = isBasicDescribedPicturesMode || isFullyDescribedImagesMode;
   const needsList = ["list", "described-pictures", "even-described-pictures"].includes(mode);
-  const needsListDescription = ["list-description", "list-description-even", "fully-described-images"].includes(mode);
-  const supportsCircleColor = !isCaptionBoxMode;
-  const supportsTextFontSelection = mode === "full-fact" || isCaptionBoxMode;
+  const needsListDescription = [
+    "list-description",
+    "list-description-even",
+    "fully-described-images",
+    "even-full-page-text",
+  ].includes(mode);
+  const supportsCircleColor = !isCaptionBoxMode && !isEvenFullPageTextMode;
+  const supportsTextFontSelection = mode === "full-fact" || isCaptionBoxMode || isEvenFullPageTextMode;
   const supportsCaptionTextAlignment = isBasicDescribedPicturesMode;
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
   const currentOpacity = mode === "full-fact" ? fullFactOpacity : overlayOpacity;
@@ -1148,7 +1428,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
     const safeDescribedPictureMaxBoxWidth = Number.isFinite(describedPictureMaxBoxWidth)
-      ? Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
+      ? isEvenFullPageTextMode
+        ? Math.min(7.6, Math.max(4, describedPictureMaxBoxWidth))
+        : Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
       : getDefaultDescribedPictureMaxBoxWidth(mode);
     const base: Record<string, unknown> = {
       mode,
@@ -1172,7 +1454,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (mode === "full-fact") {
       base.factsPerPage = factsPerPage;
     }
-    if (mode === "full-fact" || isCaptionBoxMode) {
+    if (mode === "full-fact" || isCaptionBoxMode || isEvenFullPageTextMode) {
       if (selectedFullFactFont.storageScope === "browser" && selectedFullFactFont.dataBase64) {
         base.fullFactUploadedFont = {
           bytesBase64: selectedFullFactFont.dataBase64,
@@ -1183,7 +1465,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         base.fullFactBoxFontId = fullFactBoxFontId;
       }
     }
-    if (isFullyDescribedImagesMode) {
+    if (supportsSplitTitleAndParagraphFonts) {
       if (selectedFullyDescribedTitleFont.storageScope === "browser" && selectedFullyDescribedTitleFont.dataBase64) {
         base.fullFactTitleUploadedFont = {
           bytesBase64: selectedFullyDescribedTitleFont.dataBase64,
@@ -1194,7 +1476,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         base.fullFactTitleFontId = fullyDescribedTitleFontId;
       }
     }
-    if (isCaptionBoxMode) {
+    if (isCaptionBoxMode || isEvenFullPageTextMode) {
       base.describedPictureTextAlignment = describedPictureTextAlignment;
       base.describedPictureMaxBoxWidth = safeDescribedPictureMaxBoxWidth * 72;
     }
@@ -1205,7 +1487,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, [
     mode,
     isCaptionBoxMode,
-    isFullyDescribedImagesMode,
     imageLibrary,
     numberBadgeColor,
     currentOpacity,
@@ -1223,9 +1504,11 @@ export function GeneratorApp(props: GeneratorAppProps) {
     fullyDescribedTitleFontId,
     selectedFullFactFont,
     selectedFullyDescribedTitleFont,
+    isEvenFullPageTextMode,
     targetImageSize,
     pageSize,
     pageCount,
+    supportsSplitTitleAndParagraphFonts,
   ]);
 
   async function handleGenerate() {
@@ -1383,7 +1666,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               </div>
             </div>
           )}
-          {isCaptionBoxMode && (
+          {(isCaptionBoxMode || isEvenFullPageTextMode) && (
             <div className="space-y-3">
               {supportsCaptionTextAlignment ? (
                 <>
@@ -1416,26 +1699,50 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   </div>
                 </>
               ) : null}
-              <label className="flex flex-col gap-2 sm:max-w-xs">
-                <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
-                <input
-                  type="number"
-                  min={3}
-                  max={7}
-                  step={0.1}
-                  value={describedPictureMaxBoxWidth}
-                  onChange={(event) => {
-                    const next = Number(event.target.value);
-                    setDescribedPictureMaxBoxWidth(
-                      Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
-                    );
-                  }}
-                  className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                />
-                <span className="text-xs text-zinc-500">
-                  The caption stays on one line until the box reaches this width, then it wraps.
-                </span>
-              </label>
+              {isEvenFullPageTextMode ? (
+                <label className="flex flex-col gap-2 sm:max-w-xs">
+                  <span className="text-sm font-semibold text-zinc-700">Square Box Size (inches)</span>
+                  <input
+                    type="number"
+                    min={4}
+                    max={7.6}
+                    step={0.1}
+                    value={describedPictureMaxBoxWidth}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      setDescribedPictureMaxBoxWidth(
+                        Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
+                      );
+                    }}
+                    className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                  />
+                  <span className="text-xs text-zinc-500">
+                    Width and height both use this value. The default is `7in`, the title stays centered, and the
+                    paragraph stays left aligned.
+                  </span>
+                </label>
+              ) : (
+                <label className="flex flex-col gap-2 sm:max-w-xs">
+                  <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={7}
+                    step={0.1}
+                    value={describedPictureMaxBoxWidth}
+                    onChange={(event) => {
+                      const next = Number(event.target.value);
+                      setDescribedPictureMaxBoxWidth(
+                        Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
+                      );
+                    }}
+                    className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                  />
+                  <span className="text-xs text-zinc-500">
+                    The caption stays on one line until the box reaches this width, then it wraps.
+                  </span>
+                </label>
+              )}
             </div>
           )}
           {supportsTextFontSelection && (
@@ -1443,7 +1750,11 @@ export function GeneratorApp(props: GeneratorAppProps) {
               {customFontPreviewCss ? <style>{customFontPreviewCss}</style> : null}
               <div className="flex items-center justify-between gap-3">
                 <label className="text-sm font-semibold text-zinc-700">
-                  {isFullyDescribedImagesMode ? "Caption Fonts" : isCaptionBoxMode ? "Caption Font" : "Select Font"}
+                  {supportsSplitTitleAndParagraphFonts
+                    ? "Title + Paragraph Fonts"
+                    : isCaptionBoxMode
+                      ? "Caption Font"
+                      : "Select Font"}
                 </label>
                 <button
                   type="button"
@@ -1461,7 +1772,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 />
               </div>
               {fontsError && <p className="text-sm text-red-600">{fontsError}</p>}
-              {isFullyDescribedImagesMode ? (
+              {supportsSplitTitleAndParagraphFonts ? (
                 <>
                   <div className="grid gap-4 xl:grid-cols-2">
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
@@ -1627,8 +1938,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     </div>
                     <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
                       <div className="space-y-1">
-                        <p className="text-sm font-semibold text-zinc-900">Description Font</p>
-                        <p className="text-xs text-zinc-500">Choose the family and subfont for the description text.</p>
+                        <p className="text-sm font-semibold text-zinc-900">
+                          {isEvenFullPageTextMode ? "Paragraph Font" : "Description Font"}
+                        </p>
+                        <p className="text-xs text-zinc-500">
+                          {isEvenFullPageTextMode
+                            ? "Choose the family and subfont for the paragraph text."
+                            : "Choose the family and subfont for the description text."}
+                        </p>
                       </div>
                       <div className="mt-4 grid gap-4">
                         <label className="flex flex-col gap-2">
@@ -1790,26 +2107,41 @@ export function GeneratorApp(props: GeneratorAppProps) {
                         Title: {formatFontOptionDisplayLabel(selectedFullyDescribedTitleFont)}
                       </p>
                       <p className="text-xs text-zinc-500">
-                        Description: {formatFontOptionDisplayLabel(selectedFullFactFont)}
+                        Paragraph: {formatFontOptionDisplayLabel(selectedFullFactFont)}
                       </p>
                     </div>
                     <div className="mt-3 flex justify-center">
                       <div
                         className="max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
-                        style={{ maxWidth: `${Math.round(Math.min(7, Math.max(3, describedPictureMaxBoxWidth)) * 96)}px` }}
+                        style={{
+                          maxWidth: `${Math.round(
+                            (
+                              isEvenFullPageTextMode
+                                ? Math.min(7.6, Math.max(4, describedPictureMaxBoxWidth))
+                                : Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
+                            ) * 96
+                          )}px`,
+                        }}
                       >
                         <div
                           className="text-lg leading-tight text-zinc-900"
-                          style={{ fontFamily: selectedFullyDescribedTitleFont.previewFamily, textAlign: "left" }}
+                          style={{
+                            fontFamily: selectedFullyDescribedTitleFont.previewFamily,
+                            textAlign: isEvenFullPageTextMode ? "center" : "left",
+                          }}
                         >
-                          Espresso
+                          {isEvenFullPageTextMode ? "Alpine Skiing" : "Espresso"}
                         </div>
                         <div
                           className="mt-2 text-base leading-snug text-zinc-700"
-                          style={{ fontFamily: selectedFullFactFont.previewFamily, textAlign: "left" }}
+                          style={{
+                            fontFamily: selectedFullFactFont.previewFamily,
+                            textAlign: "left",
+                          }}
                         >
-                          Made by forcing hot water through finely ground coffee under high pressure to create a small,
-                          strong shot with crema.
+                          {isEvenFullPageTextMode
+                            ? "Fast descents, precise technique, and the drama of mountain racing all come together in one focused text page."
+                            : "Made by forcing hot water through finely ground coffee under high pressure to create a small, strong shot with crema."}
                         </div>
                       </div>
                     </div>
@@ -2138,9 +2470,22 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="text-sm font-medium text-zinc-700">
-                {isFullyDescribedImagesMode ? "Titles + Descriptions" : "Title + Description"}
+                {supportsSplitTitleAndParagraphFonts ? "Titles + Descriptions" : "Title + Description"}
               </label>
-              {isFullyDescribedImagesMode ? (
+              {isEvenFullPageTextMode ? (
+                <div className="flex flex-wrap gap-2">
+                  {EVEN_FULL_PAGE_TEXT_SAMPLES.map((sample) => (
+                    <button
+                      key={sample.label}
+                      type="button"
+                      onClick={() => setListDescription(sample.value)}
+                      className="self-start rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                    >
+                      {sample.label}
+                    </button>
+                  ))}
+                </div>
+              ) : isFullyDescribedImagesMode ? (
                 <button
                   type="button"
                   onClick={() => setListDescription(FULLY_DESCRIBED_IMAGES_PLACEHOLDER)}
@@ -2155,8 +2500,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
               onChange={(event) => setListDescription(event.target.value)}
               className="h-[500px] rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
               placeholder={
-                isFullyDescribedImagesMode
-                  ? FULLY_DESCRIBED_IMAGES_PLACEHOLDER
+                supportsSplitTitleAndParagraphFonts
+                  ? isEvenFullPageTextMode
+                    ? EVEN_FULL_PAGE_TEXT_SAMPLE_WINTER_SPORTS
+                    : FULLY_DESCRIBED_IMAGES_PLACEHOLDER
                   : 'Supports [{"title": "...", "description": "..."}] or "Title | description" lines'
               }
             />
@@ -2281,6 +2628,20 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
         <Image
           src="/fully-described-images.webp"
           alt="Fully Described Pictures preview"
+          fill
+          sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
+          className="object-cover object-center"
+        />
+      </div>
+    );
+  }
+
+  if (mode === "even-full-page-text") {
+    return (
+      <div aria-hidden="true" className="relative aspect-[1332/661] overflow-hidden rounded-t-2xl bg-zinc-100">
+        <Image
+          src="/even-full-page-text.webp"
+          alt="Even Full Page Text preview"
           fill
           sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
           className="object-cover object-center"

@@ -56,6 +56,9 @@ export const DEFAULT_OVERLAY_CONFIG: OverlayConfig = {
   centerHorizontally: false,
   centerTextVertically: true,
   textOffsetTop: 0,
+  bodyPreserveLineBreaks: false,
+  bodyParagraphSpacing: 0,
+  bodyInterpretMarkdown: false,
 };
 
 export function createOverlayConfig(overrides: Partial<OverlayConfig> = {}): OverlayConfig {

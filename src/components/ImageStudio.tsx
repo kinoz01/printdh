@@ -116,6 +116,13 @@ interface ProviderStatus {
   error?: string | null;
 }
 
+interface KeywordLibraryStatus {
+  order: number;
+  keyword: string;
+  totalFetched: number;
+  savedCount: number;
+}
+
 interface SaveImageResponse {
   savedAs: string;
   duplicate?: boolean;
@@ -132,7 +139,7 @@ interface ImageLibraryPanelProps {
   deletingPath: string | null;
   onRefresh: () => Promise<void>;
   onDownloadRootZip: () => Promise<void>;
-  onRemoveAll: () => Promise<void>;
+  onRemoveAll: () => Promise<boolean>;
   onDeleteFile: (relativePath: string) => Promise<void>;
   onReorder: (folderKey: string, nextFiles: LibraryFile[]) => Promise<void>;
   onUploadFiles: (files: File[]) => Promise<void>;
@@ -145,12 +152,15 @@ interface DragState {
   pointerId: number;
 }
 
+type ResultsDialogAction = "clear-all" | "clear-fetched" | null;
+
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const STORAGE_KEY = "image-provider-keys";
 const SEARCH_CACHE_KEY = "image-search-cache-v1";
 const MAX_RESULTS = 36;
 
 export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
+  const endOfImageryRef = useRef<HTMLDivElement | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKeys>(DEFAULT_KEYS);
   const [selectedProviders, setSelectedProviders] = useState<Set<ProviderValue>>(new Set(["scraping-win"]));
   const [keywordInput, setKeywordInput] = useState("");
@@ -174,6 +184,9 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
   const [serverProviderSupport, setServerProviderSupport] = useState<Record<ProviderValue, boolean> | null>(null);
+  const [downloadingFetchedZip, setDownloadingFetchedZip] = useState(false);
+  const [resultsDialogAction, setResultsDialogAction] = useState<ResultsDialogAction>(null);
+  const [pendingResultsAction, setPendingResultsAction] = useState<Exclude<ResultsDialogAction, null> | null>(null);
 
   const refreshLibrary = useCallback(async () => {
     try {
@@ -450,11 +463,13 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         tone: "success",
       });
       await refreshLibrary();
+      return true;
     } catch (error) {
       setLibraryNotice({
         text: error instanceof Error ? error.message : "Failed to remove images",
         tone: "error",
       });
+      return false;
     } finally {
       setRemovingAll(false);
     }
@@ -510,6 +525,137 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
     [keywordGroups]
   );
   const savedImageCount = library?.files.length ?? 0;
+  const keywordLibraryStatus = useMemo<KeywordLibraryStatus[]>(() => {
+    const savedSources = new Set(Object.keys(library?.sourcesByUrl ?? {}));
+    return keywordGroups.map((group, index) => {
+      const results = group.providers.flatMap((bucket) => bucket.results);
+      const savedCount = results.reduce((count, result) => {
+        const sourceUrl = result.fullsizeUrl || result.previewUrl;
+        return sourceUrl && savedSources.has(sourceUrl) ? count + 1 : count;
+      }, 0);
+      return {
+        order: index + 1,
+        keyword: group.keyword,
+        totalFetched: results.length,
+        savedCount,
+      };
+    });
+  }, [keywordGroups, library?.sourcesByUrl]);
+  const keywordsMissingLibraryImages = useMemo(
+    () => keywordLibraryStatus.filter((entry) => entry.totalFetched > 0 && entry.savedCount === 0),
+    [keywordLibraryStatus]
+  );
+  const isResultsActionBusy = downloadingFetchedZip || downloadingRootZip || pendingResultsAction !== null || removingAll;
+
+  const persistCurrentSearchState = useCallback(
+    (nextKeywordGroups: KeywordGroup[], nextProviderStatus: ProviderStatus[] | null) => {
+      persistSearchCache({
+        keywordInput,
+        maxResults: clampResultLimit(maxResults, defaultLimit),
+        minFileSizeInput,
+        minPixelsInput,
+        selectedProviders: Array.from(selectedProviders),
+        keywordGroups: nextKeywordGroups,
+        providerStatus: nextProviderStatus,
+      });
+    },
+    [defaultLimit, keywordInput, maxResults, minFileSizeInput, minPixelsInput, selectedProviders]
+  );
+
+  const clearFetchedResults = useCallback(() => {
+    setKeywordGroups([]);
+    setProviderStatus(null);
+    setSearchError(null);
+    persistCurrentSearchState([], null);
+  }, [persistCurrentSearchState]);
+
+  const handleDownloadFetchedZip = useCallback(async () => {
+    if (totalCandidates === 0) {
+      return;
+    }
+    setDownloadingFetchedZip(true);
+    setSaveMessage(null);
+    try {
+      const response = await fetch("/api/images/fetched-zip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keywordGroups }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || "Failed to build fetched images ZIP");
+      }
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = getDownloadFileName(response.headers.get("content-disposition")) || "fetched-images-by-keyword.zip";
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      setSaveMessage({
+        text: `Downloaded ${totalCandidates} fetched image${totalCandidates === 1 ? "" : "s"} as ${anchor.download}`,
+        tone: "success",
+      });
+    } catch (error) {
+      setSaveMessage({
+        text: error instanceof Error ? error.message : "Failed to download fetched images ZIP",
+        tone: "error",
+      });
+    } finally {
+      setDownloadingFetchedZip(false);
+    }
+  }, [keywordGroups, totalCandidates]);
+
+  const handleClearFetchedResults = useCallback(async () => {
+    const fetchedCount = totalCandidates;
+    setPendingResultsAction("clear-fetched");
+    setSaveMessage(null);
+    try {
+      clearFetchedResults();
+      setSaveMessage({
+        text: `Cleared ${fetchedCount} fetched image${fetchedCount === 1 ? "" : "s"} from the current results.`,
+        tone: "success",
+      });
+    } finally {
+      setPendingResultsAction(null);
+      setResultsDialogAction(null);
+    }
+  }, [clearFetchedResults, totalCandidates]);
+
+  const handleClearAllImages = useCallback(async () => {
+    const fetchedCount = totalCandidates;
+    const currentSavedImageCount = savedImageCount;
+    setPendingResultsAction("clear-all");
+    setSaveMessage(null);
+    try {
+      clearFetchedResults();
+      const removedSavedImages = currentSavedImageCount > 0 ? await handleRemoveAll() : true;
+      setSaveMessage({
+        text: removedSavedImages
+          ? `Cleared ${fetchedCount} fetched image${fetchedCount === 1 ? "" : "s"} and removed ${currentSavedImageCount} saved image${currentSavedImageCount === 1 ? "" : "s"}.`
+          : `Cleared ${fetchedCount} fetched image${fetchedCount === 1 ? "" : "s"}, but saved images could not be removed.`,
+        tone: removedSavedImages ? "success" : "error",
+      });
+    } finally {
+      setPendingResultsAction(null);
+      setResultsDialogAction(null);
+    }
+  }, [clearFetchedResults, handleRemoveAll, savedImageCount, totalCandidates]);
+
+  useEffect(() => {
+    if (!resultsDialogAction) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !isResultsActionBusy) {
+        setResultsDialogAction(null);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isResultsActionBusy, resultsDialogAction]);
 
   const handleReorderLibrary = useCallback(
     async (folderKey: string, nextFiles: LibraryFile[]) => {
@@ -660,8 +806,48 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
     );
   };
 
+  const resultsDialogConfig = resultsDialogAction
+    ? {
+        title: resultsDialogAction === "clear-all" ? "Delete fetched and saved images?" : "Delete fetched images?",
+        description:
+          resultsDialogAction === "clear-all"
+            ? `This will clear ${totalCandidates} fetched image${totalCandidates === 1 ? "" : "s"} from the current results and permanently remove ${savedImageCount} saved image${savedImageCount === 1 ? "" : "s"} from your library. This action cannot be undone.`
+            : `This will clear ${totalCandidates} fetched image${totalCandidates === 1 ? "" : "s"} from the current results. Saved images will stay in your library.`,
+        confirmLabel: resultsDialogAction === "clear-all" ? "Delete everything" : "Delete fetched images",
+      }
+    : null;
+
+  const handleScrollToImageryEnd = useCallback(() => {
+    endOfImageryRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, []);
+
   return (
     <div className="space-y-8">
+      <div className="fixed left-4 bottom-4 z-20 sm:left-6 sm:bottom-6">
+        <button
+          type="button"
+          onClick={handleScrollToImageryEnd}
+          className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur transition hover:border-black hover:text-zinc-950"
+        >
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 20 20"
+            className="h-4 w-4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10 4.5v11" />
+            <path d="m5.5 11 4.5 4.5 4.5-4.5" />
+          </svg>
+          Scroll To End
+        </button>
+      </div>
       <div className="fixed right-4 bottom-4 z-20 sm:right-6 sm:bottom-6">
         <div className="rounded-full border border-zinc-200 bg-white/95 px-4 py-2 text-xs font-semibold text-zinc-700 shadow-sm backdrop-blur">
           Images saved: {savedImageCount}
@@ -879,27 +1065,63 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
               <p className="text-sm font-medium text-zinc-700">
                 Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
               </p>
-              <div className="inline-flex w-fit rounded-lg border border-zinc-200 bg-white p-1">
-                <button
-                  type="button"
-                  onClick={() => setResultsView("keyword")}
-                  aria-pressed={resultsView === "keyword"}
-                  className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
-                    resultsView === "keyword" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
-                  }`}
-                >
-                  Grouped by keyword
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setResultsView("provider")}
-                  aria-pressed={resultsView === "provider"}
-                  className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
-                    resultsView === "provider" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
-                  }`}
-                >
-                  Grouped by provider
-                </button>
+              <div className="flex flex-col gap-3">
+                <div className="inline-flex w-fit rounded-lg border border-zinc-200 bg-white p-1">
+                  <button
+                    type="button"
+                    onClick={() => setResultsView("keyword")}
+                    aria-pressed={resultsView === "keyword"}
+                    className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
+                      resultsView === "keyword" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Grouped by keyword
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResultsView("provider")}
+                    aria-pressed={resultsView === "provider"}
+                    className={`rounded-md px-3 py-2 text-xs font-semibold transition ${
+                      resultsView === "provider" ? "bg-black text-white" : "text-zinc-700 hover:bg-zinc-100"
+                    }`}
+                  >
+                    Grouped by provider
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadFetchedZip()}
+                    disabled={isResultsActionBusy || totalCandidates === 0}
+                    className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+                  >
+                    {downloadingFetchedZip ? "Preparing fetched ZIP…" : "Download fetched by keyword"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResultsDialogAction("clear-all")}
+                    disabled={isResultsActionBusy || (totalCandidates === 0 && savedImageCount === 0)}
+                    className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
+                  >
+                    {pendingResultsAction === "clear-all" ? "Deleting everything…" : "Delete fetched + saved"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadRootZip()}
+                    disabled={isResultsActionBusy || downloadingRootZip || savedImageCount === 0}
+                    className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+                  >
+                    {downloadingRootZip ? "Preparing saved ZIP…" : "Download saved images"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResultsDialogAction("clear-fetched")}
+                    disabled={isResultsActionBusy || totalCandidates === 0}
+                    className="rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-500 disabled:opacity-60"
+                  >
+                    {pendingResultsAction === "clear-fetched" ? "Deleting fetched…" : "Delete fetched only"}
+                  </button>
+                </div>
               </div>
             </div>
             {resultsView === "provider" ? (
@@ -985,6 +1207,33 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         )}
       </section>
 
+      {keywordLibraryStatus.length > 0 && (
+        <section className="space-y-3 rounded-xl border border-zinc-200 bg-amber-50/70 p-4">
+          <div className="space-y-1">
+            <h4 className="text-base font-semibold text-zinc-900">Keywords still missing a library image</h4>
+            <p className="text-sm text-zinc-600">
+              {keywordsMissingLibraryImages.length} of {keywordLibraryStatus.length} fetched keyword
+              {keywordLibraryStatus.length === 1 ? "" : "s"} do not have any saved image in the library yet.
+            </p>
+          </div>
+          {keywordsMissingLibraryImages.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {keywordsMissingLibraryImages.map((entry) => (
+                <span
+                  key={entry.keyword}
+                  className="rounded-full border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-zinc-800"
+                >
+                  {entry.order}. {entry.keyword} · {entry.totalFetched} fetched
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-emerald-700">
+              Every fetched keyword already has at least one saved image in the library.
+            </p>
+          )}
+        </section>
+      )}
       <ImageLibraryPanel
         library={library}
         libraryError={libraryError}
@@ -1001,6 +1250,75 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         onReorder={handleReorderLibrary}
         onUploadFiles={handleUploadFiles}
       />
+      {resultsDialogConfig && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/45 px-4 backdrop-blur-sm"
+          onClick={() => {
+            if (!isResultsActionBusy) {
+              setResultsDialogAction(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="results-images-dialog-title"
+            aria-describedby="results-images-dialog-description"
+            className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-50 text-red-600">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-6 w-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 6h18" />
+                <path d="M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6" />
+                <path d="M6.5 6l1 13a2 2 0 0 0 2 1.85h5a2 2 0 0 0 2-1.85l1-13" />
+                <path d="M10 10.5v6" />
+                <path d="M14 10.5v6" />
+              </svg>
+            </div>
+            <div className="space-y-2">
+              <h5 id="results-images-dialog-title" className="text-lg font-semibold text-zinc-950">
+                {resultsDialogConfig.title}
+              </h5>
+              <p id="results-images-dialog-description" className="text-sm text-zinc-600">
+                {resultsDialogConfig.description}
+              </p>
+            </div>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setResultsDialogAction(null)}
+                disabled={isResultsActionBusy}
+                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-800 transition hover:border-zinc-500 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void (resultsDialogAction === "clear-all" ? handleClearAllImages() : handleClearFetchedResults())}
+                disabled={isResultsActionBusy}
+                className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-60"
+              >
+                {pendingResultsAction === "clear-all"
+                  ? "Deleting everything…"
+                  : pendingResultsAction === "clear-fetched"
+                    ? "Deleting fetched…"
+                    : resultsDialogConfig.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div ref={endOfImageryRef} aria-hidden="true" />
     </div>
   );
 }

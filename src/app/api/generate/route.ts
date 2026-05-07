@@ -13,6 +13,7 @@ const schema = z.object({
     "described-pictures",
     "even-described-pictures",
     "fully-described-images",
+    "even-full-page-text",
     "image-only",
     "full-fact",
     "dictionary",

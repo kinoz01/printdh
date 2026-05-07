@@ -16,6 +16,7 @@ export type BookMode =
   | "described-pictures"
   | "even-described-pictures"
   | "fully-described-images"
+  | "even-full-page-text"
   | "image-only"
   | "full-fact"
   | "dictionary";
@@ -243,6 +244,63 @@ export async function generateBook(payload: GenerateBookPayload) {
           roundness: 14,
           opacity,
         },
+        boxTitleFontId: payload.fullFactTitleFontId,
+        boxTitleFontBytes: payload.fullFactTitleUploadedFontBytes,
+        boxTextFontId: payload.fullFactBoxFontId,
+        boxTextFontBytes: payload.fullFactUploadedFontBytes,
+        ...sharedPageOptions,
+      });
+    }
+    case "even-full-page-text": {
+      const entries = parseListDescriptionInput(payload.listDescription ?? "");
+      const fullPageTextBoxSize = payload.describedPictureMaxBoxWidth ?? 7 * 72;
+      const evenOverlayPageIndexes = Array.from({ length: pageSettings.totalPages }, (_, pageIndex) => pageIndex).filter(
+        (pageIndex) => pageIndex % 2 === 1
+      );
+      const skipLastEvenTextOverlay =
+        entries.length < evenOverlayPageIndexes.length && evenOverlayPageIndexes.length > 0
+          ? [evenOverlayPageIndexes[evenOverlayPageIndexes.length - 1]]
+          : [];
+      return renderBook({
+        entries,
+        placeholder: "Add a title and paragraph for text page #{}.",
+        imageLibrary,
+        overlayOverrides: {
+          showOnEven: true,
+          showOnOdd: false,
+          showNumber: false,
+          titleStyle: {
+            ...TITLE_STYLE,
+            fontSize: 20,
+            leading: 24,
+            alignment: "center",
+            spaceAfter: 10,
+          },
+          bodyStyle: {
+            ...FACT_STYLE,
+            fontSize: 12.5,
+            leading: 15,
+            alignment: "left",
+          },
+          marginTop: 0.5 * 72,
+          marginRight: 0.5 * 72,
+          marginBottom: 0.5 * 72,
+          marginLeft: 0.5 * 72,
+          minHeight: fullPageTextBoxSize,
+          maxHeight: fullPageTextBoxSize,
+          maxBoxWidth: fullPageTextBoxSize,
+          horizontalPadding: 0.38 * 72,
+          verticalPadding: 0.4 * 72,
+          roundness: 18,
+          centerHorizontally: true,
+          centerVertically: true,
+          centerTextVertically: true,
+          bodyPreserveLineBreaks: true,
+          bodyParagraphSpacing: 15,
+          bodyInterpretMarkdown: true,
+          opacity,
+        },
+        skipOverlayPageIndexes: skipLastEvenTextOverlay,
         boxTitleFontId: payload.fullFactTitleFontId,
         boxTitleFontBytes: payload.fullFactTitleUploadedFontBytes,
         boxTextFontId: payload.fullFactBoxFontId,

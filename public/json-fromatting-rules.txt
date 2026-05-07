@@ -1,0 +1,79 @@
+1. New line:
+Use \n to move to a new line.
+
+Example:
+"First line.\nSecond line."
+
+2. Paragraph spacing:
+Use \n\n to create an empty line between two sections.
+
+Example:
+"Intro text.\n\nIngredients:\n- Item one"
+
+3. Bullet points:
+Use \n- for simple bullet points.
+
+Example:
+"Ingredients:\n- Coffee\n- Milk\n- Sugar"
+
+4. Numbered steps:
+Use \n1., \n2., \n3. for ordered instructions.
+
+Example:
+"Instructions:\n1. Brew the coffee.\n2. Add milk.\n3. Serve hot."
+
+5. Bold text:
+Use **text** for bold.
+
+Example:
+"**Ingredients:**\n- Coffee\n- Milk"
+
+6. Italic text:
+Use *text* for italic.
+
+Example:
+"*Tip:* Use fresh coffee for better flavor."
+
+7. Bold section titles:
+Use **Title:** for clear section headers inside the description.
+
+Example:
+"**Intro:** Short introduction.\n\n**Ingredients:**"
+
+8. Inline emphasis:
+Use **bold** for important labels and *italic* for notes, tips, or optional details.
+
+Example:
+"**Garnish:** *Optional but recommended.*"
+
+9. Quotes inside JSON:
+If you need double quotes inside a JSON string, escape them with \".
+
+Example:
+"description": "This drink is called \"classic\" because it is very popular."
+
+10. Apostrophes:
+Apostrophes do not need escaping when the JSON value uses double quotes.
+
+Example:
+"description": "It's smooth and creamy."
+
+11. Slashes:
+Use normal / for alternatives.
+
+Example:
+"vodka / rum / whiskey"
+
+12. Long descriptions:
+Keep one JSON object per item, but organize the description with sections:
+**Intro:**
+**Ingredients:**
+**Instructions:**
+**Garnish:**
+**Tip:**
+
+13. Avoid raw line breaks:
+Do not press Enter inside a JSON string. Use \n instead.
+
+14. Keep JSON valid:
+Each object should use double quotes around keys and values, commas between fields, and no comma after the last item.

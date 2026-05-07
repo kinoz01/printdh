@@ -471,6 +471,14 @@ async function buildOverlayStory(
   unicodeFallbackFontData: ReturnType<typeof parseFontData>
 ) {
   const story: ParagraphLayout[] = [];
+  const bodyLayoutOptions = {
+    fallbackFont: unicodeFallbackFont,
+    fallbackFontData: unicodeFallbackFontData,
+    emojiAssetResolver: resolveEmojiInlineAsset,
+    preserveLineBreaks: config.bodyPreserveLineBreaks,
+    paragraphSpacing: config.bodyParagraphSpacing,
+    interpretMarkdown: config.bodyInterpretMarkdown,
+  };
   if (entry.title && config.titleStyle) {
     const titleFont = customBoxTitleFont ?? customBoxTextFont;
     const titleFontData = customBoxTitleFontData ?? customBoxTextFontData;
@@ -499,18 +507,12 @@ async function buildOverlayStory(
     story.push(
       ...(await layoutTextWithFont(body, config.bodyStyle, customBoxTextFont, maxWidth, undefined, {
         primaryFontData: customBoxTextFontData,
-        fallbackFont: unicodeFallbackFont,
-        fallbackFontData: unicodeFallbackFontData,
-        emojiAssetResolver: resolveEmojiInlineAsset,
+        ...bodyLayoutOptions,
       }))
     );
   } else {
     story.push(
-      ...(await layoutText(body, config.bodyStyle, getFont, maxWidth, undefined, {
-        fallbackFont: unicodeFallbackFont,
-        fallbackFontData: unicodeFallbackFontData,
-        emojiAssetResolver: resolveEmojiInlineAsset,
-      }))
+      ...(await layoutText(body, config.bodyStyle, getFont, maxWidth, undefined, bodyLayoutOptions))
     );
   }
   return story;
@@ -524,8 +526,9 @@ function measureWidestLine(story: ParagraphLayout[]) {
   let widest = 0;
   for (const paragraph of story) {
     for (const line of paragraph.lines) {
-      if (line.width > widest) {
-        widest = line.width;
+      const lineWidth = line.width + (line.indent ?? 0);
+      if (lineWidth > widest) {
+        widest = lineWidth;
       }
     }
   }
@@ -546,10 +549,10 @@ function detectSingleLineWidth(
     return null;
   }
   const line = paragraph.lines[0];
-  if (!line || line.width <= 0) {
+  const measured = (line?.width ?? 0) + (line?.indent ?? 0);
+  if (!line || measured <= 0) {
     return null;
   }
-  const measured = line.width;
   if (measured <= 0 || measured > maxWidth) {
     return null;
   }
