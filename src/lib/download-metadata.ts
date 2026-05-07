@@ -10,6 +10,7 @@ Wonderful real life sloths photographs that invoke awe and wonder`;
 export const METADATA_STORAGE_KEY = "generator-metadata-v1";
 
 const METADATA_KEYWORD_COUNT = 7;
+const LOWERCASE_TITLE_WORDS = new Set(["for", "with", "to", "in", "or", "of", "the"]);
 
 export interface DownloadMetadataFields {
   title: string;
@@ -76,8 +77,17 @@ function normalizeStoredMetadataKeywords(value: unknown) {
 }
 
 function formatMetadataHeading(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\b[a-z]/g, (character) => character.toUpperCase());
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized
+    .replace(/(^|[\s([{-])([a-z])/g, (_match, prefix: string, character: string) => `${prefix}${character.toUpperCase()}`)
+    .replace(/\b([a-z]+)\b/g, (word: string, _captured: string, offset: number) => {
+      if (offset === 0) {
+        return word;
+      }
+      return LOWERCASE_TITLE_WORDS.has(word.toLowerCase()) ? word.toLowerCase() : word;
+    });
 }
