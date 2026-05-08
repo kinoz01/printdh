@@ -66,17 +66,17 @@ const MODES = [
     description: "A centered 7 × 7 in text box appears on even pages with a title above the paragraph.",
     accent: "from-slate-200 via-stone-100 to-zinc-200",
   },
+  {
+    value: "image-only",
+    label: "Image Only",
+    description: "Edge-to-edge imagery on every page with no captions or text overlays.",
+    accent: "from-zinc-200 via-neutral-100 to-stone-200",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
   //   description: "Let imagery breathe on odd pages and narrate on even pages.",
   //   accent: "from-rose-200 via-red-100 to-orange-200",
-  // },
-  // {
-  //   value: "image-only",
-  //   label: "Image Only",
-  //   description: "Edge-to-edge imagery everywhere - perfect for mood boards.",
-  //   accent: "from-zinc-200 via-neutral-100 to-stone-200",
   // },
   // {
   //   value: "dictionary",
@@ -916,7 +916,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     "fully-described-images",
     "even-full-page-text",
   ].includes(mode);
-  const supportsCircleColor = !isCaptionBoxMode && !isEvenFullPageTextMode;
+  const supportsCircleColor = ["facts", "facts-both"].includes(mode);
   const supportsTextFontSelection = mode === "full-fact" || isCaptionBoxMode || isEvenFullPageTextMode;
   const supportsCaptionTextAlignment = isBasicDescribedPicturesMode;
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
@@ -1437,8 +1437,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
       imageLibrary,
       pageSize,
       pageCount: Math.max(4, Math.min(200, safePageCount)),
-      numberBadgeColor,
     };
+    if (supportsCircleColor) {
+      base.numberBadgeColor = numberBadgeColor;
+    }
     if (needsOverlayOpacity) {
       base.overlayOpacity = currentOpacity;
     }
@@ -1509,6 +1511,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     pageSize,
     pageCount,
     supportsSplitTitleAndParagraphFonts,
+    supportsCircleColor,
   ]);
 
   async function handleGenerate() {
@@ -2510,6 +2513,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
           </div>
         )}
 
+        {mode === "image-only" && (
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-700">
+            This template uses only the images in your library. The generated PDF will keep every page image-only, with
+            no captions, text boxes, or fact overlays.
+          </div>
+        )}
+
         {mode === "full-fact" && (
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium text-zinc-700">Facts Per Page</label>
@@ -2646,6 +2656,25 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
           sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
           className="object-cover object-center"
         />
+      </div>
+    );
+  }
+
+  if (mode === "image-only") {
+    return (
+      <div
+        aria-hidden="true"
+        className="relative aspect-[1332/661] overflow-hidden rounded-t-2xl bg-[linear-gradient(135deg,#e7e5e4_0%,#f5f5f4_46%,#d4d4d8_100%)]"
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.75),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(24,24,27,0.12),transparent_40%)]" />
+        <div className="absolute inset-5 grid grid-cols-2 gap-3">
+          <div className="overflow-hidden rounded-[1.35rem] shadow-[0_24px_50px_rgba(24,24,27,0.16)]">
+            <div className="h-full w-full bg-[linear-gradient(145deg,#292524_0%,#57534e_28%,#d6d3d1_62%,#78716c_100%)]" />
+          </div>
+          <div className="overflow-hidden rounded-[1.35rem] shadow-[0_24px_50px_rgba(24,24,27,0.16)]">
+            <div className="h-full w-full bg-[linear-gradient(160deg,#cbd5e1_0%,#64748b_26%,#0f172a_60%,#e2e8f0_100%)]" />
+          </div>
+        </div>
       </div>
     );
   }
