@@ -77,17 +77,22 @@ function normalizeStoredMetadataKeywords(value: unknown) {
 }
 
 function formatMetadataHeading(value: string) {
-  const normalized = value.trim().toLowerCase();
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, " ");
   if (!normalized) {
     return "";
   }
 
   return normalized
-    .replace(/(^|[\s([{-])([a-z])/g, (_match, prefix: string, character: string) => `${prefix}${character.toUpperCase()}`)
-    .replace(/\b([a-z]+)\b/g, (word: string, _captured: string, offset: number) => {
-      if (offset === 0) {
-        return word;
+    .split(" ")
+    .map((token, index) => {
+      const plainWord = token.replace(/^[^a-z]+|[^a-z]+$/g, "");
+      if (index > 0 && plainWord && LOWERCASE_TITLE_WORDS.has(plainWord)) {
+        return token;
       }
-      return LOWERCASE_TITLE_WORDS.has(word.toLowerCase()) ? word.toLowerCase() : word;
-    });
+      return token.replace(
+        /(^|[-/([{"“‘])([a-z])/g,
+        (_match, prefix: string, character: string) => `${prefix}${character.toUpperCase()}`
+      );
+    })
+    .join(" ");
 }
