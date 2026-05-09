@@ -2510,6 +2510,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   : 'Supports [{"title": "...", "description": "..."}] or "Title | description" lines'
               }
             />
+            {supportsSplitTitleAndParagraphFonts ? (
+              <p className="text-xs text-zinc-500">
+                Description strings follow the same formatting rules as Even Full Page Text: use <code>\n</code> for
+                new lines, <code>\n\n</code> for paragraph spacing, <code>-</code> or <code>1.</code> for lists, and{" "}
+                <code>**bold**</code> / <code>*italic*</code> for emphasis inside the JSON string.
+              </p>
+            ) : null}
           </div>
         )}
 
