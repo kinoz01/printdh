@@ -112,8 +112,13 @@ function getDefaultDescribedPictureMaxBoxWidth(mode: ModeValue) {
 const PAGE_SIZES = [
   { value: "square", label: "Square", description: "8.64 × 8.76 in" },
   { value: "us-letter", label: "US Letter", description: "8.625 × 11.25 in" },
+  { value: "hardcover", label: "Hardcover", description: "8.375 × 11.25 in" },
 ] as const;
 type PageSizeValue = (typeof PAGE_SIZES)[number]["value"];
+
+function getDefaultPageCount(pageSize: PageSizeValue) {
+  return pageSize === "hardcover" ? 80 : 40;
+}
 
 type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
@@ -751,7 +756,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [listDescription, setListDescription] = useState(props.initialListDescription ?? "");
   const [imageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
-  const [pageCount, setPageCount] = useState(40);
+  const [pageCount, setPageCount] = useState(getDefaultPageCount("square"));
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -826,6 +831,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
       setDescribedPictureMaxBoxWidth(getDefaultDescribedPictureMaxBoxWidth(nextMode));
     }
   }, []);
+
+  const handlePageSizeSelect = useCallback((nextPageSize: PageSizeValue) => {
+    const shouldResetPageCount = pageCount === getDefaultPageCount(pageSize);
+    setPageSize(nextPageSize);
+    if (shouldResetPageCount) {
+      setPageCount(getDefaultPageCount(nextPageSize));
+    }
+  }, [pageCount, pageSize]);
 
   useEffect(() => {
     setStep(parseWizardStep(searchParams.get("step")));
@@ -916,7 +929,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     "fully-described-images",
     "even-full-page-text",
   ].includes(mode);
-  const supportsCircleColor = ["facts", "facts-both"].includes(mode);
+  const supportsCircleColor = ["facts", "facts-both", "full-fact"].includes(mode);
   const supportsTextFontSelection = mode === "full-fact" || isCaptionBoxMode || isEvenFullPageTextMode;
   const supportsCaptionTextAlignment = isBasicDescribedPicturesMode;
   const opacityLabel = mode === "full-fact" ? "Fact Card Opacity" : "Overlay Opacity";
@@ -1599,7 +1612,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 2</p>
             <h3 className="text-lg font-semibold text-zinc-900">Select page size & length</h3>
-            <p className="text-sm text-zinc-700">Pick a trim size and how many pages to include in the PDF.</p>
+            <p className="text-sm text-zinc-700">Pick a trim size and how many pages to include in the PDF. (These sizes are for Bleed option)</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2">
             {PAGE_SIZES.map((option) => {
@@ -1608,7 +1621,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => setPageSize(option.value)}
+                  onClick={() => handlePageSizeSelect(option.value)}
                   className={`flex flex-col gap-1 rounded-2xl border bg-white p-4 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
                     isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
                   }`}

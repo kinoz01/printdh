@@ -1,4 +1,5 @@
 export const NUMBER_BADGE_COLOR_VALUES = [
+  "classic",
   "walnut",
   "terracotta",
   "olive",
@@ -9,13 +10,14 @@ export const NUMBER_BADGE_COLOR_VALUES = [
 
 export type NumberBadgeColorKey = (typeof NUMBER_BADGE_COLOR_VALUES)[number];
 
-export const DEFAULT_NUMBER_BADGE_COLOR: NumberBadgeColorKey = "walnut";
+export const DEFAULT_NUMBER_BADGE_COLOR: NumberBadgeColorKey = "classic";
 
 export const NUMBER_BADGE_COLOR_OPTIONS: ReadonlyArray<{
   value: NumberBadgeColorKey;
   label: string;
   hex: string;
 }> = [
+  { value: "classic", label: "Classic Peach", hex: "#ea8a72" },
   { value: "walnut", label: "Walnut", hex: "#8a5a3b" },
   { value: "terracotta", label: "Terracotta", hex: "#c8795a" },
   { value: "olive", label: "Olive", hex: "#7b8752" },

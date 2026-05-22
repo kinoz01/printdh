@@ -1,10 +1,11 @@
 export const POINTS_PER_INCH = 72;
 
-export type PageSizePreset = "square" | "us-letter";
+export type PageSizePreset = "square" | "us-letter" | "hardcover";
 
 const PAGE_SIZE_MAP: Record<PageSizePreset, { width: number; height: number }> = {
   square: { width: 8.64 * POINTS_PER_INCH, height: 8.76 * POINTS_PER_INCH },
   "us-letter": { width: 8.625 * POINTS_PER_INCH, height: 11.25 * POINTS_PER_INCH },
+  hardcover: { width: 8.375 * POINTS_PER_INCH, height: 11.25 * POINTS_PER_INCH },
 };
 
 export const DEFAULT_PAGE_SIZE: PageSizePreset = "square";

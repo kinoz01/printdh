@@ -124,6 +124,7 @@ interface BraveResult {
 const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const DEFAULT_LIMIT = 18;
 const FILTER_FETCH_MULTIPLIER = 3;
+const SCRAPING_WIN_MAX_RESULTS = 35;
 const ENV_PATH = path.resolve(process.cwd(), ".env");
 let envCache: Record<string, string> | null = null;
 
@@ -236,7 +237,8 @@ async function searchProviderForKeyword(
   keys: ProviderKeys
 ): Promise<ProviderBucket> {
   try {
-    const providerLimit = shouldOverfetchForFilters(minPixels) ? limit * FILTER_FETCH_MULTIPLIER : limit;
+    const providerMinPixels = provider === "scraping-win" ? undefined : minPixels;
+    const providerLimit = shouldOverfetchForFilters(providerMinPixels) ? limit * FILTER_FETCH_MULTIPLIER : limit;
     const promise = buildProviderPromise(provider, keyword, providerLimit, keys);
     if (!promise) {
       throw new Error("Provider not configured");
@@ -244,7 +246,7 @@ async function searchProviderForKeyword(
     const rawResults = await promise;
     const deduped = dedupeResults(rawResults);
     const withSizes = await fillMissingFileSizes(deduped);
-    const filtered = applyDimensionFilter(applyFileSizeFilter(withSizes, minFileSizeBytes), minPixels);
+    const filtered = applyDimensionFilter(applyFileSizeFilter(withSizes, minFileSizeBytes), providerMinPixels);
     const limited = filtered.slice(0, limit);
     return {
       provider,
@@ -429,21 +431,24 @@ async function runLimitedConcurrency<T>(items: T[], concurrency: number, worker:
 }
 
 async function searchScrapingWin(query: string, limit: number): Promise<RemoteImageResult[]> {
+  // scraping.win starts returning 502 once max_results exceeds 35.
+  const cappedLimit = Math.min(Math.max(limit, 1), SCRAPING_WIN_MAX_RESULTS);
   const response = await fetch("https://api.scraping.win/search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${SCRAPING_TOKEN}`,
     },
-    body: JSON.stringify({ keywords: query, max_results: limit }),
+    body: JSON.stringify({ keywords: query, max_results: cappedLimit }),
     cache: "no-store",
   });
   if (!response.ok) {
-    throw new Error("scraping.win search failed");
+    const detail = await readResponseError(response, "Image search failed");
+    throw new Error(`HTTP ${response.status}: ${detail}`);
   }
   const payload = await response.json();
   const results = Array.isArray(payload.results) ? payload.results : [];
-  return results.slice(0, limit).flatMap((item: ScrapingWinResult, index: number) => {
+  return results.slice(0, cappedLimit).flatMap((item: ScrapingWinResult, index: number) => {
     const bestImage = item.image || item.thumb;
     if (!bestImage) {
       return [];
@@ -460,6 +465,25 @@ async function searchScrapingWin(query: string, limit: number): Promise<RemoteIm
       },
     ];
   });
+}
+
+async function readResponseError(response: Response, fallback: string) {
+  const contentType = response.headers.get("content-type") ?? "";
+  try {
+    if (contentType.includes("application/json")) {
+      const payload = await response.json();
+      if (typeof payload?.error === "string" && payload.error.trim()) {
+        return payload.error.trim();
+      }
+      if (typeof payload?.message === "string" && payload.message.trim()) {
+        return payload.message.trim();
+      }
+    }
+    const text = await response.text();
+    return text.trim() ? text.trim().slice(0, 200) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function searchGoogleImages(query: string, limit: number, apiKey: string, cx: string): Promise<RemoteImageResult[]> {

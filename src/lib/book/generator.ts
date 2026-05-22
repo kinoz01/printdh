@@ -333,6 +333,7 @@ export async function generateBook(payload: GenerateBookPayload) {
         factsPerPage,
         imageLibrary,
         overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.9),
+        numberBadgeFill,
         boxTextFontId: payload.fullFactBoxFontId,
         boxTextFontBytes: payload.fullFactUploadedFontBytes,
         ...sharedPageOptions,

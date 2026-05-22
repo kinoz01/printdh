@@ -1,6 +1,9 @@
+import { execFile } from "child_process";
 import { promises as fs, Dirent } from "fs";
+import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { fetch as runtimeFetch } from "next/dist/compiled/@edge-runtime/primitives/fetch";
 import { zipSync } from "fflate";
 import { z } from "zod";
 
@@ -8,6 +11,7 @@ const IMAGES_ROOT = path.resolve(process.cwd(), "..", "images");
 const SOURCES_MAP_FILE = path.join(IMAGES_ROOT, ".sources.json");
 const ORDER_FILE_NAME = ".order.json";
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
+const REMOTE_IMAGE_TIMEOUT_MS = 15000;
 type RawCollectedFile = { name: string; relativePath: string; size: number; modified: number; added: number };
 type LibraryEntry = Omit<RawCollectedFile, "added">;
 type SourceMap = Record<string, string>;
@@ -87,16 +91,14 @@ export async function POST(request: NextRequest) {
     const targetDirectory = ensureWithinRoot(folderPath ? path.join(IMAGES_ROOT, folderPath) : IMAGES_ROOT);
     await fs.mkdir(targetDirectory, { recursive: true });
 
-    const response = await fetch(payload.url, { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("Failed to download image");
-    }
-    const arrayBuffer = await response.arrayBuffer();
-    const fileBytes = Buffer.from(arrayBuffer);
-    const extension = pickExtension(response.headers.get("content-type"), payload.url);
+    const downloaded = await downloadRemoteImage(payload.url);
+    const fileBytes = downloaded.bytes;
+    const extension = pickExtension(downloaded.contentType, downloaded.finalUrl);
     const baseFilename = buildBaseFileName(payload.title, extension);
     const existingFiles = await collectImageFiles(IMAGES_ROOT);
-    const duplicate = findDuplicateImage(existingFiles, baseFilename, fileBytes.byteLength);
+    const duplicate = isDuplicateBypassFilename(baseFilename)
+      ? findDuplicateImageBySize(existingFiles, fileBytes.byteLength)
+      : findDuplicateImage(existingFiles, baseFilename, fileBytes.byteLength);
     if (duplicate) {
       await saveSourceMapping(payload.url, toPosixRelative(duplicate.relativePath));
       return NextResponse.json({ savedAs: duplicate.relativePath, duplicate: true });
@@ -308,6 +310,158 @@ function pickExtension(contentType: string | null, url: string) {
   return ".jpg";
 }
 
+async function downloadRemoteImage(sourceUrl: string): Promise<{
+  bytes: Buffer;
+  contentType: string | null;
+  finalUrl: string;
+}> {
+  try {
+    return await downloadRemoteImageWithFetch(sourceUrl);
+  } catch (error) {
+    if (!shouldFallbackToCurl(error)) {
+      throw error;
+    }
+    return await downloadRemoteImageWithCurl(sourceUrl);
+  }
+}
+
+async function downloadRemoteImageWithFetch(sourceUrl: string): Promise<{
+  bytes: Buffer;
+  contentType: string | null;
+  finalUrl: string;
+}> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REMOTE_IMAGE_TIMEOUT_MS);
+  try {
+    const response = await runtimeFetch(sourceUrl, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        Accept: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0 Safari/537.36",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to download image (HTTP ${response.status})`);
+    }
+    const contentType = normalizeContentType(response.headers.get("content-type"));
+    const finalUrl = response.url || sourceUrl;
+    if (!looksLikeImageResponse(contentType, finalUrl)) {
+      throw new Error("Downloaded response was not an image");
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return {
+      bytes: Buffer.from(arrayBuffer),
+      contentType,
+      finalUrl,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      throw new Error("Timed out while downloading image");
+    }
+    if (error instanceof Error) {
+      throw new Error(error.message);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function shouldFallbackToCurl(error: unknown) {
+  if (!(error instanceof Error)) {
+    return true;
+  }
+  const message = error.message.trim().toLowerCase();
+  if (message === "timed out while downloading image" || message === "fetch failed") {
+    return true;
+  }
+  if (message.startsWith("failed to download image (http ")) {
+    return false;
+  }
+  if (message === "downloaded response was not an image") {
+    return false;
+  }
+  return true;
+}
+
+async function downloadRemoteImageWithCurl(sourceUrl: string): Promise<{
+  bytes: Buffer;
+  contentType: string | null;
+  finalUrl: string;
+}> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "printdh-image-"));
+  const outputPath = path.join(tempDir, "download.bin");
+  try {
+    const stdout = await runCurlDownload(sourceUrl, outputPath);
+    const [contentTypeLine = "", finalUrlLine = ""] = stdout.trim().split("\n");
+    const contentType = normalizeContentType(contentTypeLine || null);
+    const finalUrl = finalUrlLine || sourceUrl;
+    if (!looksLikeImageResponse(contentType, finalUrl)) {
+      throw new Error("Downloaded response was not an image");
+    }
+    const bytes = await fs.readFile(outputPath);
+    return { bytes, contentType, finalUrl };
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+async function runCurlDownload(sourceUrl: string, outputPath: string) {
+  return await new Promise<string>((resolve, reject) => {
+    execFile(
+      "curl",
+      [
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--location",
+        "--max-time",
+        String(Math.ceil(REMOTE_IMAGE_TIMEOUT_MS / 1000)),
+        "--user-agent",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0 Safari/537.36",
+        "--header",
+        "Accept: image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        "--output",
+        outputPath,
+        "--write-out",
+        "%{content_type}\n%{url_effective}\n",
+        sourceUrl,
+      ],
+      { encoding: "utf8", maxBuffer: 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const detail = stderr.trim() || stdout.trim() || error.message;
+          reject(new Error(detail));
+          return;
+        }
+        resolve(stdout);
+      }
+    );
+  });
+}
+
+function normalizeContentType(value: string | null) {
+  if (!value) {
+    return null;
+  }
+  return value.split(";")[0]?.trim().toLowerCase() || null;
+}
+
+function looksLikeImageResponse(contentType: string | null, url: string) {
+  if (contentType?.startsWith("image/")) {
+    return true;
+  }
+  try {
+    const parsed = new URL(url);
+    const extension = path.extname(parsed.pathname).toLowerCase();
+    return IMAGE_EXTENSIONS.has(extension);
+  } catch {
+    return false;
+  }
+}
+
 function buildBaseFileName(title: string | undefined, extension: string) {
   const base = title?.trim() ? title.trim().slice(0, 60) : "image";
   const slug = base
@@ -343,6 +497,16 @@ function buildUniqueFileName(files: RawCollectedFile[], baseFilename: string) {
 
 function findDuplicateImage(files: RawCollectedFile[], filename: string, size: number) {
   return files.find((file) => file.name === filename && file.size === size) ?? null;
+}
+
+function findDuplicateImageBySize(files: RawCollectedFile[], size: number) {
+  return files.find((file) => file.size === size) ?? null;
+}
+
+function isDuplicateBypassFilename(filename: string) {
+  const extension = path.extname(filename);
+  const stem = extension ? filename.slice(0, -extension.length) : filename;
+  return stem.trim().toLowerCase() === "untitled";
 }
 
 function ensureWithinRoot(targetPath: string) {

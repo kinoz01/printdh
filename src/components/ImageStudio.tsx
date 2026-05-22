@@ -1047,11 +1047,13 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
                 const label = PROVIDERS.find((provider) => provider.value === status.provider)?.label || status.provider;
                 return (
                   <li key={status.provider} className="flex justify-between gap-2">
-                    <span>{label}</span>
                     {status.error ? (
-                      <span className="text-red-600">{status.error}</span>
+                      <span className="text-red-600">{label}: {status.error}</span>
                     ) : (
-                      <span className="text-zinc-500">{status.count} images</span>
+                      <>
+                        <span>{label}</span>
+                        <span className="text-zinc-500">{status.count} images</span>
+                      </>
                     )}
                   </li>
                 );
@@ -1143,7 +1145,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
                             <span className="font-medium text-zinc-800">{entry.keyword}</span>
                             <span>{entry.results.length} matches</span>
                           </div>
-                          {entry.error && <p className="text-xs text-red-600">{entry.error}</p>}
+                          {entry.error && <p className="text-xs text-red-600">Search error: {entry.error}</p>}
                           {entry.results.length > 0 ? (
                             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                               {entry.results.map((result, index) =>
@@ -1381,6 +1383,10 @@ function ImageLibraryPanel({
   }, [dragState]);
 
   const librarySections = useMemo<LibrarySection[]>(() => buildLibrarySections(displayFiles), [displayFiles]);
+  const fileOrderLookup = useMemo(
+    () => new Map(displayFiles.map((file, index) => [file.relativePath, index + 1])),
+    [displayFiles]
+  );
   const removeAllCount = displayFiles.length;
 
   const handleSectionRef = useCallback((folderKey: string, node: HTMLUListElement | null) => {
@@ -1647,6 +1653,7 @@ function ImageLibraryPanel({
                   {section.files.map((file, index) => {
                     const isDragging = dragState?.activePath === file.relativePath;
                     const topInsertActive = activeInsertIndex === index;
+                    const fileOrder = fileOrderLookup.get(file.relativePath);
                     return (
                       <li
                         key={file.relativePath}
@@ -1702,15 +1709,20 @@ function ImageLibraryPanel({
                             </p>
                           </div>
                         </div>
-                        <div className="sm:w-32">
-                          <button
-                            type="button"
-                            onClick={() => void onDeleteFile(file.relativePath)}
-                            disabled={uploadingLocal || deletingPath === file.relativePath || reorderingFolder !== null}
-                            className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
-                          >
-                            {deletingPath === file.relativePath ? "Removing…" : "Remove"}
-                          </button>
+                        <div className="flex items-center gap-2 sm:w-auto">
+                          <span className="min-w-8 rounded-md border border-zinc-200 bg-zinc-50 px-2 py-2 text-center text-xs font-semibold text-zinc-700">
+                            {fileOrder ?? index + 1}
+                          </span>
+                          <div className="sm:w-32">
+                            <button
+                              type="button"
+                              onClick={() => void onDeleteFile(file.relativePath)}
+                              disabled={uploadingLocal || deletingPath === file.relativePath || reorderingFolder !== null}
+                              className="w-full rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:border-red-400 disabled:opacity-60"
+                            >
+                              {deletingPath === file.relativePath ? "Removing…" : "Remove"}
+                            </button>
+                          </div>
                         </div>
                       </li>
                     );

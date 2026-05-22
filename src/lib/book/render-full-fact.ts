@@ -23,13 +23,16 @@ const STACK_LAYOUT = {
   topMargin: 0.75 * 72,
   bottomMargin: 0.75 * 72,
   gap: 0.7 * 72,
+  minGap: 0.3 * 72,
 };
+const FULL_FACT_BOTTOM_PADDING_EXTRA = 0.12 * 72;
 
 export interface FullFactOptions {
   entries: TextEntry[];
   factsPerPage: number;
   imageLibrary?: string;
   overlayOpacity?: number;
+  numberBadgeFill?: OverlayConfig["numberBadgeFill"];
   boxTextFontId?: string;
   boxTextFontBytes?: Uint8Array;
   pageWidth?: number;
@@ -43,6 +46,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     factsPerPage,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
     overlayOpacity = 0.9,
+    numberBadgeFill,
     boxTextFontId,
     boxTextFontBytes,
     pageWidth = PAGE_WIDTH,
@@ -54,6 +58,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     showOnOdd: false,
     showNumber: true,
     opacity: overlayOpacity,
+    ...(numberBadgeFill ? { numberBadgeFill } : {}),
   });
   const evenPageCount = Math.floor(totalPages / 2);
   const overlaysNeeded = evenPageCount * factsPerPage;
@@ -191,15 +196,9 @@ async function drawFactStack(
   const cardWidth = pageWidth - 2 * STACK_LAYOUT.marginX;
   const textWidth = Math.max(4, cardWidth - 2 * config.horizontalPadding);
   const availableHeight = pageHeight - STACK_LAYOUT.topMargin - STACK_LAYOUT.bottomMargin;
-  const gap = entries.length > 1 ? STACK_LAYOUT.gap : 0;
-  const gapSpace = gap * (entries.length - 1);
-  const perCardCap = Math.max(1, (availableHeight - gapSpace) / entries.length);
-  const maxCardHeight = Math.max(
-    config.minHeight,
-    Math.min(config.maxHeight, perCardCap)
-  );
-
-  const prepared: Array<{ entry: TextEntry; story: ParagraphLayout[]; height: number }> = [];
+  const topPadding = config.verticalPadding;
+  const bottomPadding = config.verticalPadding + FULL_FACT_BOTTOM_PADDING_EXTRA;
+  const prepared: Array<{ entry: TextEntry; story: ParagraphLayout[]; height: number; desiredHeight: number }> = [];
   for (const entry of entries) {
     const story = await buildFactCardStory(
       entry,
@@ -212,15 +211,50 @@ async function drawFactStack(
       unicodeFallbackFontData
     );
     const estimated = estimateStoryHeight(story);
-    const cardHeight = Math.max(
+    const desiredHeight = Math.max(
       config.minHeight,
-      Math.min(maxCardHeight, estimated + 2 * config.verticalPadding)
+      Math.min(config.maxHeight, estimated + topPadding + bottomPadding)
     );
-    prepared.push({ entry, story, height: cardHeight });
+    prepared.push({ entry, story, height: desiredHeight, desiredHeight });
   }
 
-  const totalHeight =
+  const gapCount = Math.max(0, entries.length - 1);
+  const desiredCardHeightTotal = prepared.reduce((sum, card) => sum + card.desiredHeight, 0);
+  let gap = gapCount > 0 ? STACK_LAYOUT.gap : 0;
+  if (gapCount > 0) {
+    const desiredTotalWithDefaultGap = desiredCardHeightTotal + gap * gapCount;
+    if (desiredTotalWithDefaultGap > availableHeight) {
+      const fittedGap = (availableHeight - desiredCardHeightTotal) / gapCount;
+      gap = Math.min(STACK_LAYOUT.gap, Math.max(STACK_LAYOUT.minGap, fittedGap));
+    }
+  }
+  const gapSpace = gap * gapCount;
+  const perCardCap = Math.max(1, (availableHeight - gapSpace) / entries.length);
+  const maxCardHeight = Math.max(
+    config.minHeight,
+    Math.min(config.maxHeight, perCardCap)
+  );
+  for (const card of prepared) {
+    card.height = Math.max(config.minHeight, Math.min(maxCardHeight, card.desiredHeight));
+  }
+
+  let totalHeight =
     prepared.reduce((sum, card) => sum + card.height, 0) + gap * (prepared.length - 1);
+  let spareHeight = Math.max(0, availableHeight - totalHeight);
+  if (spareHeight > 0) {
+    const cardsNeedingMoreRoom = prepared
+      .filter((card) => card.height < card.desiredHeight)
+      .sort((left, right) => right.desiredHeight - right.height - (left.desiredHeight - left.height));
+    for (const card of cardsNeedingMoreRoom) {
+      if (spareHeight <= 0) {
+        break;
+      }
+      const extraHeight = Math.min(spareHeight, card.desiredHeight - card.height);
+      card.height += extraHeight;
+      spareHeight -= extraHeight;
+    }
+  }
+  totalHeight = prepared.reduce((sum, card) => sum + card.height, 0) + gap * (prepared.length - 1);
   let stackBottom = Math.max(STACK_LAYOUT.bottomMargin, (pageHeight - totalHeight) / 2);
   const stackTop = stackBottom + totalHeight;
   if (stackTop > pageHeight - STACK_LAYOUT.topMargin) {

@@ -126,11 +126,21 @@ function determineMimeType(identifier?: string | null): string | null {
 }
 
 async function normalizePdfCompatibleImage(bytes: Uint8Array, mimeType: string | null): Promise<NormalizedPdfImage> {
-  if (mimeType === "image/png" || mimeType === "image/jpeg") {
-    return { bytes, mimeType };
+  const metadata = await sharp(bytes).metadata();
+
+  if (mimeType === "image/png") {
+    return {
+      bytes: await sharp(bytes).png().toBuffer(),
+      mimeType: "image/png",
+    };
   }
 
-  const metadata = await sharp(bytes).metadata();
+  if (mimeType === "image/jpeg") {
+    return {
+      bytes: await sharp(bytes).jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
+      mimeType: "image/jpeg",
+    };
+  }
 
   if (metadata.hasAlpha) {
     return {
