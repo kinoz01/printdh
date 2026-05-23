@@ -51,6 +51,31 @@ export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
   return assets;
 }
 
+export async function createImageAssetsFromFiles(files: File[]): Promise<ImageAsset[]> {
+  const assets: ImageAsset[] = [];
+  for (const file of files) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const dimensions = imageSize(bytes);
+    if (!dimensions.width || !dimensions.height) {
+      throw new Error(`Unable to read dimensions for ${file.name}.`);
+    }
+    const mimeType =
+      determinePdfImageMimeType(file.type) ??
+      determinePdfImageMimeType(dimensions.type) ??
+      determinePdfImageMimeType(path.extname(file.name).toLowerCase());
+    if (!mimeType) {
+      throw new Error(`Unsupported uploaded image type for ${file.name}.`);
+    }
+    assets.push({
+      bytes,
+      width: dimensions.width,
+      height: dimensions.height,
+      mimeType,
+    });
+  }
+  return assets;
+}
+
 const TEMPLATE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".pdf"]);
 
 export async function loadTemplateAssets(folder: string): Promise<TemplateAsset[]> {
@@ -100,29 +125,43 @@ function determineMimeType(identifier?: string | null): string | null {
   switch ((identifier ?? "").toLowerCase()) {
     case ".png":
     case "png":
+    case "image/png":
       return "image/png";
     case ".jpg":
     case ".jpeg":
     case "jpg":
     case "jpeg":
+    case "image/jpg":
+    case "image/jpeg":
+    case "image/pjpeg":
       return "image/jpeg";
     case ".webp":
     case "webp":
+    case "image/webp":
       return "image/webp";
     case ".bmp":
     case "bmp":
+    case "image/bmp":
       return "image/bmp";
     case ".tif":
     case ".tiff":
     case "tif":
     case "tiff":
+    case "image/tif":
+    case "image/tiff":
       return "image/tiff";
     case ".gif":
     case "gif":
+    case "image/gif":
       return "image/gif";
     default:
       return null;
   }
+}
+
+function determinePdfImageMimeType(identifier?: string | null): ImageAsset["mimeType"] | null {
+  const mimeType = determineMimeType(identifier);
+  return mimeType === "image/png" || mimeType === "image/jpeg" ? mimeType : null;
 }
 
 async function normalizePdfCompatibleImage(bytes: Uint8Array, mimeType: string | null): Promise<NormalizedPdfImage> {

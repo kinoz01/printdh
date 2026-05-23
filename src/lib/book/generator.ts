@@ -6,6 +6,7 @@ import { renderDictionaryBook } from "./render-dictionary";
 import { hexToRgb } from "./colors";
 import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
 import { FACT_STYLE, TITLE_STYLE, type TextAlignment } from "./types";
+import type { ImageAsset } from "./types";
 
 export type BookMode =
   | "facts"
@@ -39,6 +40,7 @@ export interface GenerateBookPayload {
   targetImageSize?: number;
   pageSize?: PageSizePreset;
   pageCount?: number;
+  imageAssets?: ImageAsset[];
 }
 
 export async function generateBook(payload: GenerateBookPayload) {
@@ -51,6 +53,10 @@ export async function generateBook(payload: GenerateBookPayload) {
     pageHeight: pageSettings.height,
     totalPages: pageSettings.totalPages,
   };
+  const sharedImageOptions = {
+    imageLibrary,
+    imageAssets: payload.imageAssets,
+  };
 
   switch (payload.mode) {
     case "facts": {
@@ -58,7 +64,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Replace this placeholder fact paragraph with your narrative #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: false,
@@ -74,7 +80,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add fact for page #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: true,
@@ -90,7 +96,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add list entry #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: true,
@@ -106,7 +112,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add description for entry #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: true,
@@ -121,7 +127,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Entry #{} description goes here.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: false,
@@ -136,7 +142,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add picture description #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: true,
@@ -173,7 +179,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add picture description #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: false,
@@ -211,7 +217,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add a title and description for picture #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: true,
@@ -267,7 +273,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries,
         placeholder: "Add a title and paragraph for text page #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: true,
           showOnOdd: false,
@@ -315,7 +321,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderBook({
         entries: [],
         placeholder: "Image placeholder #{}.",
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOverrides: {
           showOnEven: false,
           showOnOdd: false,
@@ -331,7 +337,7 @@ export async function generateBook(payload: GenerateBookPayload) {
       return renderFullFactBook({
         entries,
         factsPerPage,
-        imageLibrary,
+        ...sharedImageOptions,
         overlayOpacity: clampOpacity(payload.overlayOpacity ?? 0.9),
         numberBadgeFill,
         boxTextFontId: payload.fullFactBoxFontId,
@@ -341,7 +347,7 @@ export async function generateBook(payload: GenerateBookPayload) {
     }
     case "dictionary": {
       return renderDictionaryBook({
-        imageLibrary,
+        ...sharedImageOptions,
         targetSize: payload.targetImageSize,
         ...sharedPageOptions,
       });

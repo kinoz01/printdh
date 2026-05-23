@@ -5,7 +5,7 @@ import { createOverlayConfig } from "./overlay-config";
 import { resolveEmojiInlineAsset, type InlineImageAsset } from "./emoji-inline-assets";
 import { readBookFont } from "./font-library";
 import { loadUnicodeFallbackFont, parseFontData } from "./font-support";
-import type { OverlayConfig, TextEntry } from "./types";
+import type { ImageAsset, OverlayConfig, TextEntry } from "./types";
 import { StandardFontName } from "./types";
 import { loadImageAssets } from "./assets";
 import { hexToRgb, mixColors } from "./colors";
@@ -16,6 +16,7 @@ export interface RenderBookOptions {
   entries: TextEntry[];
   placeholder: string;
   imageLibrary?: string;
+  imageAssets?: ImageAsset[];
   overlayOverrides?: Partial<OverlayConfig>;
   skipOverlayPageIndexes?: number[];
   boxTitleFontId?: string;
@@ -32,6 +33,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     entries,
     placeholder,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
+    imageAssets: providedImageAssets,
     overlayOverrides,
     skipOverlayPageIndexes = [],
     boxTitleFontId,
@@ -97,7 +99,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     return pending;
   };
 
-  const imageAssets = await loadImageAssets(imageLibrary);
+  const imageAssets = providedImageAssets ?? (await loadImageAssets(imageLibrary));
   const embeddedImages: PDFImage[] = [];
   for (const asset of imageAssets) {
     const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);

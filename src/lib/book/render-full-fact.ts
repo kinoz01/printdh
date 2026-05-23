@@ -11,6 +11,7 @@ import { createOverlayConfig } from "./overlay-config";
 import { resolveEmojiInlineAsset, type InlineImageAsset } from "./emoji-inline-assets";
 import { readBookFont } from "./font-library";
 import { loadUnicodeFallbackFont, parseFontData } from "./font-support";
+import type { ImageAsset } from "./types";
 import { OverlayConfig, StandardFontName, TextEntry } from "./types";
 import { drawParagraphs, estimateStoryHeight, layoutText, layoutTextWithFont, ParagraphLayout } from "./text-layout";
 import { drawNumberBadge, drawRoundedRectangle } from "./overlay-helpers";
@@ -31,6 +32,7 @@ export interface FullFactOptions {
   entries: TextEntry[];
   factsPerPage: number;
   imageLibrary?: string;
+  imageAssets?: ImageAsset[];
   overlayOpacity?: number;
   numberBadgeFill?: OverlayConfig["numberBadgeFill"];
   boxTextFontId?: string;
@@ -45,6 +47,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     entries,
     factsPerPage,
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
+    imageAssets: providedImageAssets,
     overlayOpacity = 0.9,
     numberBadgeFill,
     boxTextFontId,
@@ -106,7 +109,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     return pending;
   };
 
-  const assets = await loadImageAssets(imageLibrary);
+  const assets = providedImageAssets ?? (await loadImageAssets(imageLibrary));
   const embeddedImages: PDFImage[] = [];
   for (const asset of assets) {
     const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);

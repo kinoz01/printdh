@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { createImageAssetsFromFiles } from "@/lib/book/assets";
 import { generateBook } from "@/lib/book/generator";
 import { NUMBER_BADGE_COLOR_VALUES } from "@/lib/book/number-badge-colors";
 
@@ -48,10 +49,11 @@ const schema = z.object({
   pageCount: z.number().int().min(4).max(200).optional(),
 });
 
+class RequestParseError extends Error {}
+
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const payload = schema.parse(body);
+    const { payload, imageFiles } = await parseGenerateRequest(request);
     const normalizedPayload = {
       ...payload,
       fullFactUploadedFontBytes: payload.fullFactUploadedFont
@@ -60,6 +62,7 @@ export async function POST(request: NextRequest) {
       fullFactTitleUploadedFontBytes: payload.fullFactTitleUploadedFont
         ? new Uint8Array(Buffer.from(payload.fullFactTitleUploadedFont.bytesBase64, "base64"))
         : undefined,
+      imageAssets: imageFiles.length ? await createImageAssetsFromFiles(imageFiles) : undefined,
     };
     const outputBytes = await generateBook(normalizedPayload);
     const pdfBuffer = new ArrayBuffer(outputBytes.byteLength);
@@ -74,7 +77,39 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Failed to generate book", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    const status = error instanceof z.ZodError ? 400 : 500;
+    const status = error instanceof z.ZodError || error instanceof RequestParseError ? 400 : 500;
     return NextResponse.json({ error: message }, { status });
   }
+}
+
+async function parseGenerateRequest(request: NextRequest): Promise<{
+  payload: z.infer<typeof schema>;
+  imageFiles: File[];
+}> {
+  const contentType = request.headers.get("content-type") || "";
+  if (!contentType.includes("multipart/form-data")) {
+    const body = await request.json();
+    return {
+      payload: schema.parse(body),
+      imageFiles: [],
+    };
+  }
+
+  const formData = await request.formData();
+  const payloadValue = formData.get("payload");
+  if (typeof payloadValue !== "string") {
+    throw new RequestParseError("Missing payload");
+  }
+
+  let parsedPayload: unknown;
+  try {
+    parsedPayload = JSON.parse(payloadValue);
+  } catch {
+    throw new RequestParseError("Invalid payload JSON");
+  }
+
+  return {
+    payload: schema.parse(parsedPayload),
+    imageFiles: formData.getAll("images").filter((value): value is File => value instanceof File),
+  };
 }

@@ -3,11 +3,13 @@ import { DEFAULT_IMAGE_LIBRARY, PAGE_HEIGHT, PAGE_WIDTH, TOTAL_PAGES } from "./c
 import { loadImageAssets } from "./assets";
 import { hexToRgb } from "./colors";
 import { StandardFontName } from "./types";
+import type { ImageAsset } from "./types";
 
 const DEFAULT_TARGET_SIZE = 7.7 * 72;
 
 export interface DictionaryOptions {
   imageLibrary?: string;
+  imageAssets?: ImageAsset[];
   targetSize?: number;
   pageWidth?: number;
   pageHeight?: number;
@@ -17,13 +19,14 @@ export interface DictionaryOptions {
 export async function renderDictionaryBook(options: DictionaryOptions = {}) {
   const {
     imageLibrary = DEFAULT_IMAGE_LIBRARY,
+    imageAssets: providedImageAssets,
     targetSize = DEFAULT_TARGET_SIZE,
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
   } = options;
   const pdf = await PDFDocument.create();
-  const imageAssets = await loadImageAssets(imageLibrary);
+  const imageAssets = providedImageAssets ?? (await loadImageAssets(imageLibrary));
   const embeddedImages: { image: PDFImage; width: number; height: number }[] = [];
   for (const asset of imageAssets) {
     const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);
