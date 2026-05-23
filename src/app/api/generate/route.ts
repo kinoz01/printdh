@@ -27,6 +27,7 @@ const schema = z.object({
   numberBadgeColor: z.enum(NUMBER_BADGE_COLOR_VALUES).optional(),
   describedPictureTextAlignment: z.enum(["left", "center"]).optional(),
   describedPictureMaxBoxWidth: z.number().positive().optional(),
+  describedPictureBoxHeight: z.number().positive().optional(),
   factsPerPage: z.number().int().positive().optional(),
   fullFactBoxFontId: z.string().min(1).optional(),
   fullFactUploadedFont: z

@@ -103,11 +103,27 @@ type ModeValue =
 
 const DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH = 6.2;
 const DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH = 7;
+const DEFAULT_EVEN_FULL_PAGE_TEXT_BOX_HEIGHT = 7;
 
 function getDefaultDescribedPictureMaxBoxWidth(mode: ModeValue) {
   return mode === "fully-described-images" || mode === "even-full-page-text"
     ? DEFAULT_FULLY_DESCRIBED_MAX_BOX_WIDTH
     : DEFAULT_DESCRIBED_PICTURE_MAX_BOX_WIDTH;
+}
+
+function getDefaultEvenFullPageTextBoxHeight() {
+  return DEFAULT_EVEN_FULL_PAGE_TEXT_BOX_HEIGHT;
+}
+
+function getSafeDescribedPictureMaxBoxWidth(value: number, mode: ModeValue) {
+  const fallback = getDefaultDescribedPictureMaxBoxWidth(mode);
+  const resolved = Number.isFinite(value) ? value : fallback;
+  return mode === "even-full-page-text" ? Math.min(7.6, Math.max(4, resolved)) : Math.min(7, Math.max(3, resolved));
+}
+
+function getSafeEvenFullPageTextBoxHeight(value: number) {
+  const resolved = Number.isFinite(value) ? value : getDefaultEvenFullPageTextBoxHeight();
+  return Math.min(7.6, Math.max(4, resolved));
 }
 
 const PAGE_SIZES = [
@@ -777,6 +793,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [describedPictureMaxBoxWidth, setDescribedPictureMaxBoxWidth] = useState(
     getDefaultDescribedPictureMaxBoxWidth("full-fact")
   );
+  const [evenFullPageTextBoxHeight, setEvenFullPageTextBoxHeight] = useState(getDefaultEvenFullPageTextBoxHeight());
   const [fullFactOpacity, setFullFactOpacity] = useState(0.9);
   const [factsPerPage, setFactsPerPage] = useState(4);
   const [targetImageSize, setTargetImageSize] = useState(7.7);
@@ -843,6 +860,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
       nextMode === "even-full-page-text"
     ) {
       setDescribedPictureMaxBoxWidth(getDefaultDescribedPictureMaxBoxWidth(nextMode));
+    }
+    if (nextMode === "even-full-page-text") {
+      setEvenFullPageTextBoxHeight(getDefaultEvenFullPageTextBoxHeight());
     }
   }, []);
 
@@ -1454,11 +1474,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
-    const safeDescribedPictureMaxBoxWidth = Number.isFinite(describedPictureMaxBoxWidth)
-      ? isEvenFullPageTextMode
-        ? Math.min(7.6, Math.max(4, describedPictureMaxBoxWidth))
-        : Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
-      : getDefaultDescribedPictureMaxBoxWidth(mode);
+    const safeDescribedPictureMaxBoxWidth = getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode);
+    const safeEvenFullPageTextBoxHeight = getSafeEvenFullPageTextBoxHeight(evenFullPageTextBoxHeight);
     const base: Record<string, unknown> = {
       mode,
       imageLibrary,
@@ -1508,6 +1525,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (isCaptionBoxMode || isEvenFullPageTextMode) {
       base.describedPictureTextAlignment = describedPictureTextAlignment;
       base.describedPictureMaxBoxWidth = safeDescribedPictureMaxBoxWidth * 72;
+      if (isEvenFullPageTextMode) {
+        base.describedPictureBoxHeight = safeEvenFullPageTextBoxHeight * 72;
+      }
     }
     if (mode === "dictionary") {
       base.targetImageSize = targetImageSize * 72;
@@ -1528,6 +1548,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     listDescription,
     describedPictureTextAlignment,
     describedPictureMaxBoxWidth,
+    evenFullPageTextBoxHeight,
     factsPerPage,
     fullFactBoxFontId,
     fullyDescribedTitleFontId,
@@ -1729,27 +1750,47 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 </>
               ) : null}
               {isEvenFullPageTextMode ? (
-                <label className="flex flex-col gap-2 sm:max-w-xs">
-                  <span className="text-sm font-semibold text-zinc-700">Square Box Size (inches)</span>
-                  <input
-                    type="number"
-                    min={4}
-                    max={7.6}
-                    step={0.1}
-                    value={describedPictureMaxBoxWidth}
-                    onChange={(event) => {
-                      const next = Number(event.target.value);
-                      setDescribedPictureMaxBoxWidth(
-                        Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
-                      );
-                    }}
-                    className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-                  />
+                <div className="space-y-2 sm:max-w-md">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-semibold text-zinc-700">Box Width (inches)</span>
+                      <input
+                        type="number"
+                        min={4}
+                        max={7.6}
+                        step={0.1}
+                        value={describedPictureMaxBoxWidth}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          setDescribedPictureMaxBoxWidth(
+                            Number.isFinite(next) ? next : getDefaultDescribedPictureMaxBoxWidth(mode)
+                          );
+                        }}
+                        className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2">
+                      <span className="text-sm font-semibold text-zinc-700">Box Height (inches)</span>
+                      <input
+                        type="number"
+                        min={4}
+                        max={7.6}
+                        step={0.1}
+                        value={evenFullPageTextBoxHeight}
+                        onChange={(event) => {
+                          const next = Number(event.target.value);
+                          setEvenFullPageTextBoxHeight(
+                            Number.isFinite(next) ? next : getDefaultEvenFullPageTextBoxHeight()
+                          );
+                        }}
+                        className="rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
+                      />
+                    </label>
+                  </div>
                   <span className="text-xs text-zinc-500">
-                    Width and height both use this value. The default is `7in`, the title stays centered, and the
-                    paragraph stays left aligned.
+                    Defaults are `7in` wide and `7in` tall. The title stays centered, and the paragraph stays left aligned.
                   </span>
-                </label>
+                </div>
               ) : (
                 <label className="flex flex-col gap-2 sm:max-w-xs">
                   <span className="text-sm font-semibold text-zinc-700">Wrap After Box Width (inches)</span>
@@ -2141,15 +2182,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     </div>
                     <div className="mt-3 flex justify-center">
                       <div
-                        className="max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
+                        className={`max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 ${
+                          isEvenFullPageTextMode ? "flex flex-col justify-center" : ""
+                        }`}
                         style={{
-                          maxWidth: `${Math.round(
-                            (
-                              isEvenFullPageTextMode
-                                ? Math.min(7.6, Math.max(4, describedPictureMaxBoxWidth))
-                                : Math.min(7, Math.max(3, describedPictureMaxBoxWidth))
-                            ) * 96
-                          )}px`,
+                          width: isEvenFullPageTextMode
+                            ? `${Math.round(getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode) * 96)}px`
+                            : undefined,
+                          minHeight: isEvenFullPageTextMode
+                            ? `${Math.round(getSafeEvenFullPageTextBoxHeight(evenFullPageTextBoxHeight) * 96)}px`
+                            : undefined,
+                          maxWidth: isEvenFullPageTextMode
+                            ? "100%"
+                            : `${Math.round(getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode) * 96)}px`,
                         }}
                       >
                         <div
@@ -2591,15 +2636,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
               Back: Image studio
             </button>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-              <label className="flex items-center gap-3 text-sm text-zinc-700">
+              <label className="flex items-center gap-3 text-sm font-medium text-zinc-700">
                 <input
                   type="checkbox"
                   checked={optimizeImagesForPdf}
                   onChange={(event) => setOptimizeImagesForPdf(event.target.checked)}
                   disabled={isLoading}
-                  className="h-4 w-4 rounded border-zinc-300 text-black focus:ring-black disabled:cursor-not-allowed"
+                  aria-label="Compress images for PDF"
+                  className="peer sr-only"
                 />
-                <span>Optimize images for PDF</span>
+                <span className="relative h-7 w-12 rounded-full bg-zinc-300 transition-colors duration-200 peer-checked:bg-zinc-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-black peer-disabled:cursor-not-allowed peer-disabled:opacity-60">
+                  <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5" />
+                </span>
+                <span>compress</span>
               </label>
               <button
                 type="button"

@@ -32,6 +32,7 @@ export interface GenerateBookPayload {
   numberBadgeColor?: NumberBadgeColorKey;
   describedPictureTextAlignment?: Extract<TextAlignment, "left" | "center">;
   describedPictureMaxBoxWidth?: number;
+  describedPictureBoxHeight?: number;
   factsPerPage?: number;
   fullFactBoxFontId?: string;
   fullFactUploadedFontBytes?: Uint8Array;
@@ -262,7 +263,8 @@ export async function generateBook(payload: GenerateBookPayload) {
     }
     case "even-full-page-text": {
       const entries = parseListDescriptionInput(payload.listDescription ?? "");
-      const fullPageTextBoxSize = payload.describedPictureMaxBoxWidth ?? 7 * 72;
+      const fullPageTextBoxWidth = payload.describedPictureMaxBoxWidth ?? 7 * 72;
+      const fullPageTextBoxHeight = payload.describedPictureBoxHeight ?? 7 * 72;
       const evenOverlayPageIndexes = Array.from({ length: pageSettings.totalPages }, (_, pageIndex) => pageIndex).filter(
         (pageIndex) => pageIndex % 2 === 1
       );
@@ -295,9 +297,9 @@ export async function generateBook(payload: GenerateBookPayload) {
           marginRight: 0.5 * 72,
           marginBottom: 0.5 * 72,
           marginLeft: 0.5 * 72,
-          minHeight: fullPageTextBoxSize,
-          maxHeight: fullPageTextBoxSize,
-          maxBoxWidth: fullPageTextBoxSize,
+          minHeight: fullPageTextBoxHeight,
+          maxHeight: fullPageTextBoxHeight,
+          maxBoxWidth: fullPageTextBoxWidth,
           horizontalPadding: 0.38 * 72,
           verticalPadding: 0.4 * 72,
           roundness: 18,
