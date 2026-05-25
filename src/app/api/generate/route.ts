@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createImageAssetsFromFiles } from "@/lib/book/assets";
+import { loadImageAssets, type ProvidedBookImage } from "@/lib/book/assets";
 import { generateBook } from "@/lib/book/generator";
 import { NUMBER_BADGE_COLOR_VALUES } from "@/lib/book/number-badge-colors";
 
@@ -54,7 +54,7 @@ class RequestParseError extends Error {}
 
 export async function POST(request: NextRequest) {
   try {
-    const { payload, imageFiles } = await parseGenerateRequest(request);
+    const { payload, uploadedImages } = await parseGenerateRequest(request);
     const normalizedPayload = {
       ...payload,
       fullFactUploadedFontBytes: payload.fullFactUploadedFont
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       fullFactTitleUploadedFontBytes: payload.fullFactTitleUploadedFont
         ? new Uint8Array(Buffer.from(payload.fullFactTitleUploadedFont.bytesBase64, "base64"))
         : undefined,
-      imageAssets: imageFiles.length ? await createImageAssetsFromFiles(imageFiles) : undefined,
+      imageAssets: uploadedImages.length ? await loadImageAssets(payload.imageLibrary ?? "", uploadedImages) : undefined,
     };
     const outputBytes = await generateBook(normalizedPayload);
     const pdfBuffer = new ArrayBuffer(outputBytes.byteLength);
@@ -85,14 +85,14 @@ export async function POST(request: NextRequest) {
 
 async function parseGenerateRequest(request: NextRequest): Promise<{
   payload: z.infer<typeof schema>;
-  imageFiles: File[];
+  uploadedImages: ProvidedBookImage[];
 }> {
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {
     const body = await request.json();
     return {
       payload: schema.parse(body),
-      imageFiles: [],
+      uploadedImages: [],
     };
   }
 
@@ -111,6 +111,15 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
 
   return {
     payload: schema.parse(parsedPayload),
-    imageFiles: formData.getAll("images").filter((value): value is File => value instanceof File),
+    uploadedImages: await Promise.all(
+      formData
+        .getAll("images")
+        .filter((value): value is File => value instanceof File && value.size > 0)
+        .map(async (file) => ({
+          name: file.name || "image",
+          contentType: file.type || undefined,
+          bytes: new Uint8Array(await file.arrayBuffer()),
+        }))
+    ),
   };
 }

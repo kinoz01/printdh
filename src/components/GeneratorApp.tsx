@@ -4,7 +4,6 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
-import { isPdfUploadMimeType, prepareImagesForPdfUpload } from "@/lib/pdf-image-optimizer";
 import {
   DEFAULT_NUMBER_BADGE_COLOR,
   NUMBER_BADGE_COLOR_OPTIONS,
@@ -166,17 +165,6 @@ interface GeneratorAppProps {
   defaultImageLibrary?: string;
 }
 
-interface LibraryFilePayload {
-  name: string;
-  relativePath: string;
-  modified: number;
-  previewUrl: string;
-}
-
-interface LibraryPayload {
-  files: LibraryFilePayload[];
-}
-
 interface FontSourceGroup {
   key: string;
   label: string;
@@ -203,7 +191,6 @@ const DEFAULT_FULL_FACT_FONT_OPTION: BookFontOption = {
 };
 const DEFAULT_FULL_FACT_FONT_SOURCE_KEY = "__default_source__";
 const DEFAULT_FULL_FACT_FONT_SOURCE_LABEL = "Default";
-const DEFAULT_BROWSER_IMAGE_LIBRARY = "../images";
 const FULL_FACT_FONT_PREVIEW_TEXT = "Cows remember familiar faces and build strong social bonds.";
 const STACKED_EVEN_FACTS_PLACEHOLDER = `[
 "Coffee beans are not actually beans; they are the pits (seeds) of bright red berries called coffee cherries.",
@@ -824,7 +811,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [isFullyDescribedTitleFontVariantMenuOpen, setIsFullyDescribedTitleFontVariantMenuOpen] = useState(false);
   const [isFullyDescribedTitleFontVariantFiltering, setIsFullyDescribedTitleFontVariantFiltering] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [optimizeImagesForPdf, setOptimizeImagesForPdf] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const browserFontFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1217,20 +1203,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }, 0);
   }, [closeFullFactFontSourceMenu]);
 
+  const handleFullFactFontSourceOpen = useCallback(() => {
+    setIsFullFactFontSourceMenuOpen(true);
+    setIsFullFactFontSourceFiltering(false);
+    fullFactFontSourceInputRef.current?.focus();
+  }, []);
+
   const handleFullFactFontSourceToggle = useCallback(() => {
     if (isFullFactFontSourceMenuOpen) {
       closeFullFactFontSourceMenu();
       return;
     }
-    setIsFullFactFontSourceMenuOpen(true);
-    setIsFullFactFontSourceFiltering(false);
-    fullFactFontSourceInputRef.current?.focus();
-  }, [closeFullFactFontSourceMenu, isFullFactFontSourceMenuOpen]);
-
-  const handleFullFactFontVariantFocus = useCallback(() => {
-    setIsFullFactFontVariantMenuOpen(true);
-    setIsFullFactFontVariantFiltering(false);
-  }, []);
+    handleFullFactFontSourceOpen();
+  }, [closeFullFactFontSourceMenu, handleFullFactFontSourceOpen, isFullFactFontSourceMenuOpen]);
 
   const handleFullFactFontVariantChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -1273,15 +1258,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }, 0);
   }, [closeFullFactFontVariantMenu]);
 
+  const handleFullFactFontVariantOpen = useCallback(() => {
+    setIsFullFactFontVariantMenuOpen(true);
+    setIsFullFactFontVariantFiltering(false);
+    fullFactFontVariantInputRef.current?.focus();
+  }, []);
+
   const handleFullFactFontVariantToggle = useCallback(() => {
     if (isFullFactFontVariantMenuOpen) {
       closeFullFactFontVariantMenu();
       return;
     }
-    setIsFullFactFontVariantMenuOpen(true);
-    setIsFullFactFontVariantFiltering(false);
-    fullFactFontVariantInputRef.current?.focus();
-  }, [closeFullFactFontVariantMenu, isFullFactFontVariantMenuOpen]);
+    handleFullFactFontVariantOpen();
+  }, [closeFullFactFontVariantMenu, handleFullFactFontVariantOpen, isFullFactFontVariantMenuOpen]);
 
   const selectFullyDescribedTitleFontSource = useCallback(
     (group: FontSourceGroup) => {
@@ -1357,20 +1346,23 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }, 0);
   }, [closeFullyDescribedTitleFontSourceMenu]);
 
+  const handleFullyDescribedTitleFontSourceOpen = useCallback(() => {
+    setIsFullyDescribedTitleFontSourceMenuOpen(true);
+    setIsFullyDescribedTitleFontSourceFiltering(false);
+    fullyDescribedTitleFontSourceInputRef.current?.focus();
+  }, []);
+
   const handleFullyDescribedTitleFontSourceToggle = useCallback(() => {
     if (isFullyDescribedTitleFontSourceMenuOpen) {
       closeFullyDescribedTitleFontSourceMenu();
       return;
     }
-    setIsFullyDescribedTitleFontSourceMenuOpen(true);
-    setIsFullyDescribedTitleFontSourceFiltering(false);
-    fullyDescribedTitleFontSourceInputRef.current?.focus();
-  }, [closeFullyDescribedTitleFontSourceMenu, isFullyDescribedTitleFontSourceMenuOpen]);
-
-  const handleFullyDescribedTitleFontVariantFocus = useCallback(() => {
-    setIsFullyDescribedTitleFontVariantMenuOpen(true);
-    setIsFullyDescribedTitleFontVariantFiltering(false);
-  }, []);
+    handleFullyDescribedTitleFontSourceOpen();
+  }, [
+    closeFullyDescribedTitleFontSourceMenu,
+    handleFullyDescribedTitleFontSourceOpen,
+    isFullyDescribedTitleFontSourceMenuOpen,
+  ]);
 
   const handleFullyDescribedTitleFontVariantChange = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -1423,15 +1415,23 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }, 0);
   }, [closeFullyDescribedTitleFontVariantMenu]);
 
+  const handleFullyDescribedTitleFontVariantOpen = useCallback(() => {
+    setIsFullyDescribedTitleFontVariantMenuOpen(true);
+    setIsFullyDescribedTitleFontVariantFiltering(false);
+    fullyDescribedTitleFontVariantInputRef.current?.focus();
+  }, []);
+
   const handleFullyDescribedTitleFontVariantToggle = useCallback(() => {
     if (isFullyDescribedTitleFontVariantMenuOpen) {
       closeFullyDescribedTitleFontVariantMenu();
       return;
     }
-    setIsFullyDescribedTitleFontVariantMenuOpen(true);
-    setIsFullyDescribedTitleFontVariantFiltering(false);
-    fullyDescribedTitleFontVariantInputRef.current?.focus();
-  }, [closeFullyDescribedTitleFontVariantMenu, isFullyDescribedTitleFontVariantMenuOpen]);
+    handleFullyDescribedTitleFontVariantOpen();
+  }, [
+    closeFullyDescribedTitleFontVariantMenu,
+    handleFullyDescribedTitleFontVariantOpen,
+    isFullyDescribedTitleFontVariantMenuOpen,
+  ]);
 
   const handleBrowserFontUploadClick = useCallback(() => {
     browserFontFileInputRef.current?.click();
@@ -1567,10 +1567,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     setError(null);
     setSuccessMessage(null);
     try {
-      const response = await fetch(
-        "/api/generate",
-        await buildGeneratePdfRequest(payload, optimizeImagesForPdf, imageLibrary)
-      );
+      const response = await fetch("/api/generate", buildJsonGenerateRequest(payload));
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(detail.error || "Unable to generate PDF");
@@ -1859,10 +1856,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                               type="text"
                               value={fullyDescribedTitleFontSourceSearch}
                               onChange={handleFullyDescribedTitleFontSourceChange}
-                              onFocus={() => {
-                                setIsFullyDescribedTitleFontSourceMenuOpen(true);
-                                setIsFullyDescribedTitleFontSourceFiltering(false);
-                              }}
+                              onFocus={handleFullyDescribedTitleFontSourceOpen}
+                              onClick={handleFullyDescribedTitleFontSourceOpen}
                               onBlur={handleFullyDescribedTitleFontSourceBlur}
                               placeholder="Search font family..."
                               role="combobox"
@@ -1931,7 +1926,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                               type="text"
                               value={fullyDescribedTitleFontVariantSearch}
                               onChange={handleFullyDescribedTitleFontVariantChange}
-                              onFocus={handleFullyDescribedTitleFontVariantFocus}
+                              onFocus={handleFullyDescribedTitleFontVariantOpen}
+                              onClick={handleFullyDescribedTitleFontVariantOpen}
                               onBlur={handleFullyDescribedTitleFontVariantBlur}
                               placeholder="Search variety..."
                               role="combobox"
@@ -2026,10 +2022,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                               type="text"
                               value={fullFactFontSourceSearch}
                               onChange={handleFullFactFontSourceChange}
-                              onFocus={() => {
-                                setIsFullFactFontSourceMenuOpen(true);
-                                setIsFullFactFontSourceFiltering(false);
-                              }}
+                              onFocus={handleFullFactFontSourceOpen}
+                              onClick={handleFullFactFontSourceOpen}
                               onBlur={handleFullFactFontSourceBlur}
                               placeholder="Search font family..."
                               role="combobox"
@@ -2098,7 +2092,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                               type="text"
                               value={fullFactFontVariantSearch}
                               onChange={handleFullFactFontVariantChange}
-                              onFocus={handleFullFactFontVariantFocus}
+                              onFocus={handleFullFactFontVariantOpen}
+                              onClick={handleFullFactFontVariantOpen}
                               onBlur={handleFullFactFontVariantBlur}
                               placeholder="Search variety..."
                               role="combobox"
@@ -2182,15 +2177,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     </div>
                     <div className="mt-3 flex justify-center">
                       <div
-                        className={`max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3 ${
-                          isEvenFullPageTextMode ? "flex flex-col justify-center" : ""
-                        }`}
+                        className="max-w-full rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
                         style={{
                           width: isEvenFullPageTextMode
                             ? `${Math.round(getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode) * 96)}px`
-                            : undefined,
-                          minHeight: isEvenFullPageTextMode
-                            ? `${Math.round(getSafeEvenFullPageTextBoxHeight(evenFullPageTextBoxHeight) * 96)}px`
                             : undefined,
                           maxWidth: isEvenFullPageTextMode
                             ? "100%"
@@ -2232,10 +2222,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                           type="text"
                           value={fullFactFontSourceSearch}
                           onChange={handleFullFactFontSourceChange}
-                          onFocus={() => {
-                            setIsFullFactFontSourceMenuOpen(true);
-                            setIsFullFactFontSourceFiltering(false);
-                          }}
+                          onFocus={handleFullFactFontSourceOpen}
+                          onClick={handleFullFactFontSourceOpen}
                           onBlur={handleFullFactFontSourceBlur}
                           placeholder="Search font family..."
                           role="combobox"
@@ -2304,7 +2292,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                           type="text"
                           value={fullFactFontVariantSearch}
                           onChange={handleFullFactFontVariantChange}
-                          onFocus={handleFullFactFontVariantFocus}
+                          onFocus={handleFullFactFontVariantOpen}
+                          onClick={handleFullFactFontVariantOpen}
                           onBlur={handleFullFactFontVariantBlur}
                           placeholder="Search variety..."
                           role="combobox"
@@ -2635,30 +2624,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
             >
               Back: Image studio
             </button>
-            <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-              <label className="flex items-center gap-3 text-sm font-medium text-zinc-700">
-                <input
-                  type="checkbox"
-                  checked={optimizeImagesForPdf}
-                  onChange={(event) => setOptimizeImagesForPdf(event.target.checked)}
-                  disabled={isLoading}
-                  aria-label="Compress images for PDF"
-                  className="peer sr-only"
-                />
-                <span className="relative h-7 w-12 rounded-full bg-zinc-300 transition-colors duration-200 peer-checked:bg-zinc-900 peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-black peer-disabled:cursor-not-allowed peer-disabled:opacity-60">
-                  <span className="absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 peer-checked:translate-x-5" />
-                </span>
-                <span>compress</span>
-              </label>
-              <button
-                type="button"
-                onClick={handleGenerate}
-                disabled={isLoading}
-                className="w-full rounded-md bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60 sm:w-auto"
-              >
-                {isLoading ? "Generating…" : "Generate PDF"}
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className="w-full rounded-md bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60 sm:w-auto"
+            >
+              {isLoading ? "Generating…" : "Generate PDF"}
+            </button>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}
@@ -2688,70 +2661,6 @@ function buildJsonGenerateRequest(payload: Record<string, unknown>): RequestInit
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   };
-}
-
-async function buildGeneratePdfRequest(
-  payload: Record<string, unknown>,
-  optimizeImagesForPdf: boolean,
-  imageLibrary: string
-): Promise<RequestInit> {
-  const defaultRequest = buildJsonGenerateRequest(payload);
-  if (imageLibrary !== DEFAULT_BROWSER_IMAGE_LIBRARY) {
-    return defaultRequest;
-  }
-
-  try {
-    const libraryFiles = await loadRootLibraryFilesForPdfUpload();
-    if (!libraryFiles.length) {
-      return defaultRequest;
-    }
-
-    const uploadFiles = optimizeImagesForPdf ? await prepareImagesForPdfUpload(libraryFiles) : libraryFiles;
-    if (!uploadFiles.every((file) => isPdfUploadMimeType(file.type))) {
-      return defaultRequest;
-    }
-
-    const formData = new FormData();
-    formData.set("payload", JSON.stringify(payload));
-    for (const file of uploadFiles) {
-      formData.append("images", file);
-    }
-    return {
-      method: "POST",
-      body: formData,
-    };
-  } catch (error) {
-    console.warn("Falling back to the original PDF image flow.", error);
-    return defaultRequest;
-  }
-}
-
-async function loadRootLibraryFilesForPdfUpload(): Promise<File[]> {
-  const response = await fetch("/api/images", { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error("Unable to read images folder");
-  }
-
-  const payload = (await response.json()) as LibraryPayload;
-  const rootFiles = payload.files.filter((file) => isRootLibraryFile(file.relativePath));
-  return Promise.all(
-    rootFiles.map(async (file) => {
-      const imageResponse = await fetch(file.previewUrl, { cache: "no-store" });
-      if (!imageResponse.ok) {
-        throw new Error(`Unable to load ${file.name}`);
-      }
-      const blob = await imageResponse.blob();
-      return new File([blob], file.name, {
-        type: blob.type,
-        lastModified: file.modified,
-      });
-    })
-  );
-}
-
-function isRootLibraryFile(relativePath: string) {
-  // Mirror the current generator behavior, which reads only the root-level files in ../images.
-  return !relativePath.includes("/") && !relativePath.includes("\\");
 }
 
 function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) {

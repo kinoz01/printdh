@@ -8,7 +8,18 @@ import { orderBy } from "natural-orderby";
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"]);
 type NormalizedPdfImage = Pick<ImageAsset, "bytes" | "mimeType">;
 
-export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
+export interface ProvidedBookImage {
+  name: string;
+  bytes: Uint8Array;
+  contentType?: string;
+}
+
+export async function loadImageAssets(folder: string, providedImages?: ProvidedBookImage[]): Promise<ImageAsset[]> {
+  const files = providedImages && providedImages.length > 0 ? providedImages : await loadStoredBookImages(folder);
+  return buildImageAssets(files);
+}
+
+async function loadStoredBookImages(folder: string): Promise<ProvidedBookImage[]> {
   const absolute = path.resolve(process.cwd(), folder);
   let entries: string[] = [];
   try {
@@ -28,15 +39,34 @@ export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
       (value) => naturalKey(path.basename(value).toLowerCase()),
     ]
   );
+  const storedImages: ProvidedBookImage[] = [];
+  for (const file of files) {
+    try {
+      storedImages.push({
+        name: path.basename(file),
+        bytes: new Uint8Array(await fs.readFile(file)),
+        contentType: determineMimeType(path.extname(file).toLowerCase()) ?? undefined,
+      });
+    } catch (error) {
+      console.warn(`skip image ${file}: ${(error as Error).message}`);
+    }
+  }
+  return storedImages;
+}
+
+async function buildImageAssets(files: ProvidedBookImage[]): Promise<ImageAsset[]> {
   const assets: ImageAsset[] = [];
   for (const file of files) {
     try {
-      const bytes = await fs.readFile(file);
+      const bytes = file.bytes;
       const dimensions = imageSize(bytes);
       if (!dimensions.width || !dimensions.height) {
         continue;
       }
-      const sourceMimeType = determineMimeType(dimensions.type) ?? determineMimeType(path.extname(file).toLowerCase());
+      const sourceMimeType =
+        determineMimeType(dimensions.type) ??
+        determineMimeType(file.contentType) ??
+        determineMimeType(path.extname(file.name).toLowerCase());
       const normalized = await normalizePdfCompatibleImage(bytes, sourceMimeType);
       assets.push({
         bytes: normalized.bytes,
@@ -45,35 +75,22 @@ export async function loadImageAssets(folder: string): Promise<ImageAsset[]> {
         mimeType: normalized.mimeType,
       });
     } catch (error) {
-      console.warn(`skip image ${file}: ${(error as Error).message}`);
+      console.warn(`skip image ${file.name}: ${(error as Error).message}`);
     }
   }
   return assets;
 }
 
 export async function createImageAssetsFromFiles(files: File[]): Promise<ImageAsset[]> {
-  const assets: ImageAsset[] = [];
-  for (const file of files) {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const dimensions = imageSize(bytes);
-    if (!dimensions.width || !dimensions.height) {
-      throw new Error(`Unable to read dimensions for ${file.name}.`);
-    }
-    const mimeType =
-      determinePdfImageMimeType(file.type) ??
-      determinePdfImageMimeType(dimensions.type) ??
-      determinePdfImageMimeType(path.extname(file.name).toLowerCase());
-    if (!mimeType) {
-      throw new Error(`Unsupported uploaded image type for ${file.name}.`);
-    }
-    assets.push({
-      bytes,
-      width: dimensions.width,
-      height: dimensions.height,
-      mimeType,
-    });
-  }
-  return assets;
+  return buildImageAssets(
+    await Promise.all(
+      files.map(async (file) => ({
+        name: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        contentType: file.type || undefined,
+      }))
+    )
+  );
 }
 
 const TEMPLATE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".pdf"]);
@@ -154,32 +171,38 @@ function determineMimeType(identifier?: string | null): string | null {
     case "gif":
     case "image/gif":
       return "image/gif";
+    case ".avif":
+    case "avif":
+    case "image/avif":
+      return "image/avif";
+    case ".heif":
+    case "heif":
+    case "image/heif":
+    case ".heic":
+    case "heic":
+    case "image/heic":
+      return "image/heif";
     default:
       return null;
   }
 }
 
-function determinePdfImageMimeType(identifier?: string | null): ImageAsset["mimeType"] | null {
-  const mimeType = determineMimeType(identifier);
-  return mimeType === "image/png" || mimeType === "image/jpeg" ? mimeType : null;
-}
-
 async function normalizePdfCompatibleImage(bytes: Uint8Array, mimeType: string | null): Promise<NormalizedPdfImage> {
-  const metadata = await sharp(bytes).metadata();
-
   if (mimeType === "image/png") {
     return {
-      bytes: await sharp(bytes).png().toBuffer(),
+      bytes,
       mimeType: "image/png",
     };
   }
 
   if (mimeType === "image/jpeg") {
     return {
-      bytes: await sharp(bytes).jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
+      bytes,
       mimeType: "image/jpeg",
     };
   }
+
+  const metadata = await sharp(bytes).metadata();
 
   if (metadata.hasAlpha) {
     return {
