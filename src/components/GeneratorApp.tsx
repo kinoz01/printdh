@@ -2431,7 +2431,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               Configure Content
             </button>
           </div>
-          <ImageStudio />
+          <ImageStudio pageSize={pageSize} />
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"

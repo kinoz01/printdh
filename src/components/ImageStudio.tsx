@@ -13,6 +13,7 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 
+import { resolvePageSettings, type PageSizePreset } from "@/lib/book/constants";
 import { MAX_KEYWORDS } from "@/lib/image-search/constants";
 
 const PROVIDERS = [
@@ -106,6 +107,7 @@ interface LibrarySection {
 
 interface ImageStudioProps {
   defaultLimit?: number;
+  pageSize?: PageSizePreset;
 }
 
 type ResultsView = "keyword" | "provider";
@@ -126,9 +128,11 @@ interface KeywordLibraryStatus {
 interface SaveImageResponse {
   savedAs: string;
   duplicate?: boolean;
+  mappedUrls?: string[];
 }
 
 interface ImageLibraryPanelProps {
+  cropPreviewAspectRatio: number;
   library: LibraryPayload | null;
   libraryError: string | null;
   libraryNotice: { text: string; tone: "success" | "error" } | null;
@@ -159,7 +163,7 @@ const STORAGE_KEY = "image-provider-keys";
 const SEARCH_CACHE_KEY = "image-search-cache-v1";
 const MAX_RESULTS = 36;
 
-export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
+export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStudioProps) {
   const endOfImageryRef = useRef<HTMLDivElement | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKeys>(DEFAULT_KEYS);
   const [selectedProviders, setSelectedProviders] = useState<Set<ProviderValue>>(new Set(["scraping-win"]));
@@ -187,6 +191,10 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
   const [downloadingFetchedZip, setDownloadingFetchedZip] = useState(false);
   const [resultsDialogAction, setResultsDialogAction] = useState<ResultsDialogAction>(null);
   const [pendingResultsAction, setPendingResultsAction] = useState<Exclude<ResultsDialogAction, null> | null>(null);
+  const cropPreviewAspectRatio = useMemo(() => {
+    const { width, height } = resolvePageSettings(pageSize);
+    return width / height;
+  }, [pageSize]);
 
   const refreshLibrary = useCallback(async () => {
     try {
@@ -395,19 +403,36 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             url: image.fullsizeUrl || image.previewUrl,
-            title: image.title,
+            fullsizeUrl: image.fullsizeUrl || undefined,
+            previewUrl: image.previewUrl || undefined,
+            title: image.title?.trim() || undefined,
           }),
         });
         if (!response.ok) {
           const detail = await response.json().catch(() => ({}));
           throw new Error(detail.error || "Failed to save image");
         }
-        const { savedAs, duplicate } = (await response.json()) as SaveImageResponse;
+        const { savedAs, duplicate, mappedUrls } = (await response.json()) as SaveImageResponse;
+        const sourceUrls = (mappedUrls?.length ? mappedUrls : [image.fullsizeUrl, image.previewUrl]).filter(
+          (value): value is string => Boolean(value)
+        );
+        setLibrary((current) => {
+          if (!current) {
+            return current;
+          }
+          return {
+            ...current,
+            sourcesByUrl: {
+              ...(current.sourcesByUrl ?? {}),
+              ...Object.fromEntries(sourceUrls.map((url) => [url, savedAs])),
+            },
+          };
+        });
         setSaveMessage({
           text: duplicate ? `Already saved as ${savedAs}` : `Saved to ${savedAs}`,
           tone: "success",
         });
-        await refreshLibrary();
+        void refreshLibrary();
       } catch (error) {
         setSaveMessage({
           text: error instanceof Error ? error.message : "Failed to save image",
@@ -763,7 +788,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         key={uniqueKey ?? `${result.id}-${result.keyword}-${result.provider}`}
         className="flex flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white"
       >
-        <div className="relative aspect-square bg-zinc-100">
+        <div className="relative overflow-hidden bg-zinc-100" style={{ aspectRatio: cropPreviewAspectRatio }}>
           <img
             src={result.previewUrl}
             alt={result.title || result.source}
@@ -1064,9 +1089,14 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         {totalCandidates > 0 && (
           <div className="space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm font-medium text-zinc-700">
-                Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-zinc-700">
+                  Fetched {totalCandidates} candidates across {keywordGroups.length} keyword{keywordGroups.length === 1 ? "" : "s"}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Cards preview the centered page crop for the size selected in step 2.
+                </p>
+              </div>
               <div className="flex flex-col gap-3">
                 <div className="inline-flex w-fit rounded-lg border border-zinc-200 bg-white p-1">
                   <button
@@ -1237,6 +1267,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
         </section>
       )}
       <ImageLibraryPanel
+        cropPreviewAspectRatio={cropPreviewAspectRatio}
         library={library}
         libraryError={libraryError}
         libraryNotice={libraryNotice}
@@ -1326,6 +1357,7 @@ export function ImageStudio({ defaultLimit = 10 }: ImageStudioProps) {
 }
 
 function ImageLibraryPanel({
+  cropPreviewAspectRatio,
   library,
   libraryError,
   libraryNotice,
@@ -1694,7 +1726,10 @@ function ImageLibraryPanel({
                               <path d="M4 13.5h12" />
                             </svg>
                           </button>
-                          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100">
+                          <div
+                            className="h-16 flex-shrink-0 overflow-hidden rounded-md bg-zinc-100"
+                            style={{ aspectRatio: cropPreviewAspectRatio }}
+                          >
                             <img
                               src={file.previewUrl}
                               alt={file.name}

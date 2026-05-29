@@ -3,7 +3,6 @@ import { promises as fs, Dirent } from "fs";
 import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
-import { fetch as runtimeFetch } from "next/dist/compiled/@edge-runtime/primitives/fetch";
 import { zipSync } from "fflate";
 import { z } from "zod";
 
@@ -12,14 +11,22 @@ const SOURCES_MAP_FILE = path.join(IMAGES_ROOT, ".sources.json");
 const ORDER_FILE_NAME = ".order.json";
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".webp", ".gif"]);
 const REMOTE_IMAGE_TIMEOUT_MS = 15000;
+const REMOTE_IMAGE_MULTI_URL_TIMEOUT_MS = 10000;
 type RawCollectedFile = { name: string; relativePath: string; size: number; modified: number; added: number };
 type LibraryEntry = Omit<RawCollectedFile, "added">;
 type SourceMap = Record<string, string>;
-const saveSchema = z.object({
-  url: z.string().url(),
-  title: z.string().optional(),
-  folder: z.string().optional(),
-});
+const saveSchema = z
+  .object({
+    url: z.string().url().optional(),
+    fullsizeUrl: z.string().url().optional(),
+    previewUrl: z.string().url().optional(),
+    title: z.string().trim().min(1).nullish(),
+    folder: z.string().optional(),
+  })
+  .refine((value) => Boolean(value.fullsizeUrl || value.previewUrl || value.url), {
+    message: "Missing image URL",
+    path: ["url"],
+  });
 const reorderSchema = z.object({
   folder: z.string().optional(),
   order: z.array(z.string()).min(1),
@@ -91,17 +98,27 @@ export async function POST(request: NextRequest) {
     const targetDirectory = ensureWithinRoot(folderPath ? path.join(IMAGES_ROOT, folderPath) : IMAGES_ROOT);
     await fs.mkdir(targetDirectory, { recursive: true });
 
-    const downloaded = await downloadRemoteImage(payload.url);
+    const candidateUrls = buildCandidateUrls(payload);
+    const sourceMapUrls = buildSourceMapUrls(payload);
+    const sourceMap = await readSourceMap();
+    const mappedPath = await findSourceMapping(sourceMap, sourceMapUrls);
+    if (mappedPath) {
+      return NextResponse.json({ savedAs: mappedPath, duplicate: true, mappedUrls: sourceMapUrls });
+    }
+
+    const existingFilesPromise = collectImageFiles(IMAGES_ROOT);
+    const downloaded = await downloadRemoteImage(candidateUrls);
     const fileBytes = downloaded.bytes;
     const extension = pickExtension(downloaded.contentType, downloaded.finalUrl);
-    const baseFilename = buildBaseFileName(payload.title, extension);
-    const existingFiles = await collectImageFiles(IMAGES_ROOT);
+    const baseFilename = buildBaseFileName(payload.title ?? undefined, extension);
+    const existingFiles = await existingFilesPromise;
+    const mappedUrls = collectMappedUrls(sourceMapUrls, downloaded.finalUrl);
     const duplicate = isDuplicateBypassFilename(baseFilename)
-      ? findDuplicateImageBySize(existingFiles, fileBytes.byteLength)
-      : findDuplicateImage(existingFiles, baseFilename, fileBytes.byteLength);
+      ? await findDuplicateImageByBytes(existingFiles, fileBytes)
+      : await findDuplicateImageByNameAndBytes(existingFiles, baseFilename, fileBytes);
     if (duplicate) {
-      await saveSourceMapping(payload.url, toPosixRelative(duplicate.relativePath));
-      return NextResponse.json({ savedAs: duplicate.relativePath, duplicate: true });
+      await saveSourceMappings(mappedUrls, toPosixRelative(duplicate.relativePath));
+      return NextResponse.json({ savedAs: duplicate.relativePath, duplicate: true, mappedUrls });
     }
     const filename = buildUniqueFileName(existingFiles, baseFilename);
     const filePath = ensureWithinRoot(path.join(targetDirectory, filename));
@@ -109,8 +126,8 @@ export async function POST(request: NextRequest) {
 
     const savedAs = path.relative(IMAGES_ROOT, filePath) || path.basename(filePath);
     await appendFileToOrder(toRelativeFolderPath(targetDirectory), path.basename(filePath));
-    await saveSourceMapping(payload.url, toPosixRelative(savedAs));
-    return NextResponse.json({ savedAs });
+    await saveSourceMappings(mappedUrls, toPosixRelative(savedAs));
+    return NextResponse.json({ savedAs, mappedUrls });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues.map((issue) => issue.message).join("; ") }, { status: 400 });
@@ -310,30 +327,107 @@ function pickExtension(contentType: string | null, url: string) {
   return ".jpg";
 }
 
-async function downloadRemoteImage(sourceUrl: string): Promise<{
+function buildCandidateUrls(payload: z.infer<typeof saveSchema>) {
+  const seen = new Set<string>();
+  const candidates: string[] = [];
+  for (const url of [payload.fullsizeUrl, payload.url, payload.previewUrl]) {
+    const normalized = typeof url === "string" ? url.trim() : "";
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    candidates.push(normalized);
+  }
+  return candidates;
+}
+
+function buildSourceMapUrls(payload: z.infer<typeof saveSchema>) {
+  const primaryUrls = [payload.fullsizeUrl, payload.url].filter((url): url is string => Boolean(url?.trim()));
+  if (primaryUrls.length > 0) {
+    return uniqueUrls(primaryUrls);
+  }
+  return uniqueUrls([payload.previewUrl].filter((url): url is string => Boolean(url?.trim())));
+}
+
+function collectMappedUrls(candidateUrls: string[], finalUrl: string) {
+  return uniqueUrls([...candidateUrls, finalUrl]);
+}
+
+function uniqueUrls(urls: string[]) {
+  const seen = new Set<string>();
+  const normalizedUrls: string[] = [];
+  for (const url of urls) {
+    const normalized = url.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    normalizedUrls.push(normalized);
+  }
+  return normalizedUrls;
+}
+
+async function findSourceMapping(sourceMap: SourceMap, candidateUrls: string[]) {
+  for (const url of candidateUrls) {
+    const mappedPath = sourceMap[url];
+    if (mappedPath && (await libraryFileExists(mappedPath))) {
+      return mappedPath;
+    }
+  }
+  return null;
+}
+
+function getRemoteImageTimeoutMs(candidateCount: number) {
+  return candidateCount > 1 ? REMOTE_IMAGE_MULTI_URL_TIMEOUT_MS : REMOTE_IMAGE_TIMEOUT_MS;
+}
+
+async function downloadRemoteImage(candidateUrls: string[]): Promise<{
+  bytes: Buffer;
+  contentType: string | null;
+  finalUrl: string;
+}> {
+  const errors: string[] = [];
+  const timeoutMs = getRemoteImageTimeoutMs(candidateUrls.length);
+  for (const [index, sourceUrl] of candidateUrls.entries()) {
+    const shouldUseCurlFallback = index === candidateUrls.length - 1;
+    try {
+      if (!shouldUseCurlFallback) {
+        return await downloadRemoteImageWithFetch(sourceUrl, timeoutMs);
+      }
+      return await downloadRemoteImageWithFallback(sourceUrl, timeoutMs);
+    } catch (error) {
+      const prefix = candidateUrls.length > 1 ? `Attempt ${index + 1}/${candidateUrls.length}: ` : "";
+      const message = error instanceof Error ? error.message : "Failed to download image";
+      errors.push(`${prefix}${message}`);
+    }
+  }
+  throw new Error(errors.join(" | ") || "Unable to download image");
+}
+
+async function downloadRemoteImageWithFallback(sourceUrl: string, timeoutMs: number): Promise<{
   bytes: Buffer;
   contentType: string | null;
   finalUrl: string;
 }> {
   try {
-    return await downloadRemoteImageWithFetch(sourceUrl);
+    return await downloadRemoteImageWithFetch(sourceUrl, timeoutMs);
   } catch (error) {
     if (!shouldFallbackToCurl(error)) {
       throw error;
     }
-    return await downloadRemoteImageWithCurl(sourceUrl);
+    return await downloadRemoteImageWithCurl(sourceUrl, timeoutMs);
   }
 }
 
-async function downloadRemoteImageWithFetch(sourceUrl: string): Promise<{
+async function downloadRemoteImageWithFetch(sourceUrl: string, timeoutMs: number): Promise<{
   bytes: Buffer;
   contentType: string | null;
   finalUrl: string;
 }> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REMOTE_IMAGE_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await runtimeFetch(sourceUrl, {
+    const response = await fetch(sourceUrl, {
       signal: controller.signal,
       redirect: "follow",
       headers: {
@@ -386,7 +480,7 @@ function shouldFallbackToCurl(error: unknown) {
   return true;
 }
 
-async function downloadRemoteImageWithCurl(sourceUrl: string): Promise<{
+async function downloadRemoteImageWithCurl(sourceUrl: string, timeoutMs: number): Promise<{
   bytes: Buffer;
   contentType: string | null;
   finalUrl: string;
@@ -394,7 +488,7 @@ async function downloadRemoteImageWithCurl(sourceUrl: string): Promise<{
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "printdh-image-"));
   const outputPath = path.join(tempDir, "download.bin");
   try {
-    const stdout = await runCurlDownload(sourceUrl, outputPath);
+    const stdout = await runCurlDownload(sourceUrl, outputPath, timeoutMs);
     const [contentTypeLine = "", finalUrlLine = ""] = stdout.trim().split("\n");
     const contentType = normalizeContentType(contentTypeLine || null);
     const finalUrl = finalUrlLine || sourceUrl;
@@ -408,7 +502,7 @@ async function downloadRemoteImageWithCurl(sourceUrl: string): Promise<{
   }
 }
 
-async function runCurlDownload(sourceUrl: string, outputPath: string) {
+async function runCurlDownload(sourceUrl: string, outputPath: string, timeoutMs: number) {
   return await new Promise<string>((resolve, reject) => {
     execFile(
       "curl",
@@ -418,7 +512,7 @@ async function runCurlDownload(sourceUrl: string, outputPath: string) {
         "--show-error",
         "--location",
         "--max-time",
-        String(Math.ceil(REMOTE_IMAGE_TIMEOUT_MS / 1000)),
+        String(Math.ceil(timeoutMs / 1000)),
         "--user-agent",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0 Safari/537.36",
         "--header",
@@ -495,12 +589,32 @@ function buildUniqueFileName(files: RawCollectedFile[], baseFilename: string) {
   return `${stem}-${suffix}${extension}`;
 }
 
-function findDuplicateImage(files: RawCollectedFile[], filename: string, size: number) {
-  return files.find((file) => file.name === filename && file.size === size) ?? null;
+async function findDuplicateImageByNameAndBytes(files: RawCollectedFile[], filename: string, bytes: Buffer) {
+  return await findMatchingImageFile(
+    files.filter((file) => file.name === filename && file.size === bytes.byteLength),
+    bytes
+  );
 }
 
-function findDuplicateImageBySize(files: RawCollectedFile[], size: number) {
-  return files.find((file) => file.size === size) ?? null;
+async function findDuplicateImageByBytes(files: RawCollectedFile[], bytes: Buffer) {
+  return await findMatchingImageFile(
+    files.filter((file) => file.size === bytes.byteLength),
+    bytes
+  );
+}
+
+async function findMatchingImageFile(files: RawCollectedFile[], bytes: Buffer) {
+  for (const file of files) {
+    try {
+      const existingBytes = await fs.readFile(resolveLibraryPath(file.relativePath));
+      if (existingBytes.equals(bytes)) {
+        return file;
+      }
+    } catch {
+      // Ignore unreadable or missing candidates and continue checking.
+    }
+  }
+  return null;
 }
 
 function isDuplicateBypassFilename(filename: string) {
@@ -729,13 +843,31 @@ async function readSourceMap(): Promise<SourceMap> {
   }
 }
 
-async function saveSourceMapping(sourceUrl: string, relativePath: string) {
-  if (!sourceUrl) {
+async function libraryFileExists(relativePath: string) {
+  try {
+    const stats = await fs.stat(resolveLibraryPath(relativePath));
+    return stats.isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function saveSourceMappings(sourceUrls: string[], relativePath: string) {
+  if (!sourceUrls.length) {
     return;
   }
   const current = await readSourceMap();
-  current[sourceUrl] = relativePath;
-  await fs.writeFile(SOURCES_MAP_FILE, JSON.stringify(current, null, 2));
+  let mutated = false;
+  for (const sourceUrl of sourceUrls) {
+    if (!sourceUrl || current[sourceUrl] === relativePath) {
+      continue;
+    }
+    current[sourceUrl] = relativePath;
+    mutated = true;
+  }
+  if (mutated) {
+    await fs.writeFile(SOURCES_MAP_FILE, JSON.stringify(current, null, 2));
+  }
 }
 
 async function removeSourceMappingByPath(relativePath: string) {
