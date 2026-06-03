@@ -16,6 +16,7 @@ const schema = z.object({
     "fully-described-images",
     "even-full-page-text",
     "image-only",
+    "uploaded-images",
     "full-fact",
     "dictionary",
   ]),
@@ -46,15 +47,16 @@ const schema = z.object({
     })
     .optional(),
   targetImageSize: z.number().positive().optional(),
+  showPageNumbers: z.boolean().optional(),
   pageSize: z.enum(["square", "us-letter", "hardcover"]).optional(),
-  pageCount: z.number().int().min(4).max(200).optional(),
+  pageCount: z.number().int().min(1).max(200).optional(),
 });
 
 class RequestParseError extends Error {}
 
 export async function POST(request: NextRequest) {
   try {
-    const { payload, uploadedImages } = await parseGenerateRequest(request);
+    const { payload, uploadedImages, uploadedBackgroundImages } = await parseGenerateRequest(request);
     const normalizedPayload = {
       ...payload,
       fullFactUploadedFontBytes: payload.fullFactUploadedFont
@@ -64,6 +66,9 @@ export async function POST(request: NextRequest) {
         ? new Uint8Array(Buffer.from(payload.fullFactTitleUploadedFont.bytesBase64, "base64"))
         : undefined,
       imageAssets: uploadedImages.length ? await loadImageAssets(payload.imageLibrary ?? "", uploadedImages) : undefined,
+      backgroundImageAssets: uploadedBackgroundImages.length
+        ? await loadImageAssets(payload.imageLibrary ?? "", uploadedBackgroundImages)
+        : undefined,
     };
     const outputBytes = await generateBook(normalizedPayload);
     const pdfBuffer = new ArrayBuffer(outputBytes.byteLength);
@@ -86,6 +91,7 @@ export async function POST(request: NextRequest) {
 async function parseGenerateRequest(request: NextRequest): Promise<{
   payload: z.infer<typeof schema>;
   uploadedImages: ProvidedBookImage[];
+  uploadedBackgroundImages: ProvidedBookImage[];
 }> {
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {
@@ -93,6 +99,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
     return {
       payload: schema.parse(body),
       uploadedImages: [],
+      uploadedBackgroundImages: [],
     };
   }
 
@@ -111,15 +118,20 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
 
   return {
     payload: schema.parse(parsedPayload),
-    uploadedImages: await Promise.all(
-      formData
-        .getAll("images")
-        .filter((value): value is File => value instanceof File && value.size > 0)
-        .map(async (file) => ({
-          name: file.name || "image",
-          contentType: file.type || undefined,
-          bytes: new Uint8Array(await file.arrayBuffer()),
-        }))
-    ),
+    uploadedImages: await readProvidedImages(formData, "images"),
+    uploadedBackgroundImages: await readProvidedImages(formData, "backgroundImages"),
   };
+}
+
+async function readProvidedImages(formData: FormData, fieldName: string): Promise<ProvidedBookImage[]> {
+  return Promise.all(
+    formData
+      .getAll(fieldName)
+      .filter((value): value is File => value instanceof File && value.size > 0)
+      .map(async (file) => ({
+        name: file.name || "image",
+        contentType: file.type || undefined,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      }))
+  );
 }

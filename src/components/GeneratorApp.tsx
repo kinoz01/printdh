@@ -1,8 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element */
+
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
 import {
   DEFAULT_NUMBER_BADGE_COLOR,
@@ -72,6 +74,12 @@ const MODES = [
     description: "Edge-to-edge imagery on every page with no captions or text overlays.",
     accent: "from-zinc-200 via-neutral-100 to-stone-200",
   },
+  {
+    value: "uploaded-images",
+    label: "Uploaded Image Pages",
+    description: "Upload backgrounds and centered content images directly.",
+    accent: "from-emerald-200 via-sky-100 to-stone-200",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
@@ -97,6 +105,7 @@ type ModeValue =
   | "fully-described-images"
   | "even-full-page-text"
   | "image-only"
+  | "uploaded-images"
   | "full-fact"
   | "dictionary";
 
@@ -139,6 +148,10 @@ function getDefaultPageCount(pageSize: PageSizeValue) {
 type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
 type DescribedPictureTextAlignment = "center" | "left";
+
+const UPLOAD_IMAGE_ACCEPT =
+  "image/png,image/jpeg,image/webp,image/bmp,image/tiff,image/gif,image/avif,image/heic,image/heif";
+const UPLOAD_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "avif", "heic", "heif"]);
 
 interface BookFontOption {
   id: string;
@@ -773,6 +786,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [imageLibrary] = useState(props.defaultImageLibrary ?? "../images");
   const [pageSize, setPageSize] = useState<PageSizeValue>("square");
   const [pageCount, setPageCount] = useState(getDefaultPageCount("square"));
+  const [uploadedBackgroundFiles, setUploadedBackgroundFiles] = useState<File[]>([]);
+  const [uploadedContentFiles, setUploadedContentFiles] = useState<File[]>([]);
+  const [uploadedShowPageNumbers, setUploadedShowPageNumbers] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -819,6 +835,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const fullyDescribedTitleFontSourceInputRef = useRef<HTMLInputElement | null>(null);
   const fullyDescribedTitleFontVariantInputRef = useRef<HTMLInputElement | null>(null);
   const searchParams = useSearchParams();
+  const isUploadedImagesMode = mode === "uploaded-images";
 
   const navigateToStep = useCallback((nextStep: WizardStep) => {
     if (typeof window === "undefined") {
@@ -852,17 +869,32 @@ export function GeneratorApp(props: GeneratorAppProps) {
     }
   }, []);
 
-  const handlePageSizeSelect = useCallback((nextPageSize: PageSizeValue) => {
-    const shouldResetPageCount = pageCount === getDefaultPageCount(pageSize);
-    setPageSize(nextPageSize);
-    if (shouldResetPageCount) {
-      setPageCount(getDefaultPageCount(nextPageSize));
-    }
-  }, [pageCount, pageSize]);
+  const handlePageSizeSelect = useCallback(
+    (nextPageSize: PageSizeValue) => {
+      const shouldResetPageCount = pageCount === getDefaultPageCount(pageSize);
+      setPageSize(nextPageSize);
+      if (!isUploadedImagesMode && shouldResetPageCount) {
+        setPageCount(getDefaultPageCount(nextPageSize));
+      }
+    },
+    [isUploadedImagesMode, pageCount, pageSize]
+  );
 
   useEffect(() => {
     setStep(parseWizardStep(searchParams.get("step")));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (isUploadedImagesMode && uploadedContentFiles.length > 0) {
+      setPageCount(Math.min(200, Math.max(1, uploadedContentFiles.length)));
+    }
+  }, [isUploadedImagesMode, uploadedContentFiles.length]);
+
+  useEffect(() => {
+    if (isUploadedImagesMode && step > 2) {
+      navigateToStep(2);
+    }
+  }, [isUploadedImagesMode, navigateToStep, step]);
 
   const loadBrowserStoredFonts = useCallback(async () => {
     const fonts = await listBrowserFonts();
@@ -935,7 +967,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     };
   }, [browserFonts]);
 
-  const needsOverlayOpacity = !["image-only", "dictionary"].includes(mode);
+  const needsOverlayOpacity = !["image-only", "dictionary", "uploaded-images"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
   const isBasicDescribedPicturesMode = ["described-pictures", "even-described-pictures"].includes(mode);
   const isFullyDescribedImagesMode = mode === "fully-described-images";
@@ -1472,18 +1504,57 @@ export function GeneratorApp(props: GeneratorAppProps) {
     [loadBrowserStoredFonts, serverFonts]
   );
 
+  const addUploadedBackgroundFiles = useCallback((files: FileList | File[] | null | undefined) => {
+    setUploadedBackgroundFiles((current) => appendUploadFiles(current, files));
+  }, []);
+
+  const addUploadedContentFiles = useCallback((files: FileList | File[] | null | undefined) => {
+    setUploadedContentFiles((current) => appendUploadFiles(current, files));
+  }, []);
+
+  const handleUploadedBackgroundFiles = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      addUploadedBackgroundFiles(event.target.files);
+      event.target.value = "";
+    },
+    [addUploadedBackgroundFiles]
+  );
+
+  const handleUploadedContentFiles = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      addUploadedContentFiles(event.target.files);
+      event.target.value = "";
+    },
+    [addUploadedContentFiles]
+  );
+
+  const removeUploadedBackgroundFile = useCallback((index: number) => {
+    setUploadedBackgroundFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+  }, []);
+
+  const removeUploadedContentFile = useCallback((index: number) => {
+    setUploadedContentFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+  }, []);
+
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
+    const minPageCount = isUploadedImagesMode ? 1 : 4;
     const safeDescribedPictureMaxBoxWidth = getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode);
     const safeEvenFullPageTextBoxHeight = getSafeEvenFullPageTextBoxHeight(evenFullPageTextBoxHeight);
     const base: Record<string, unknown> = {
       mode,
       imageLibrary,
       pageSize,
-      pageCount: Math.max(4, Math.min(200, safePageCount)),
+      pageCount: Math.max(minPageCount, Math.min(200, safePageCount)),
     };
     if (supportsCircleColor) {
       base.numberBadgeColor = numberBadgeColor;
+    }
+    if (isUploadedImagesMode) {
+      base.showPageNumbers = uploadedShowPageNumbers;
+      if (uploadedShowPageNumbers) {
+        base.numberBadgeColor = numberBadgeColor;
+      }
     }
     if (needsOverlayOpacity) {
       base.overlayOpacity = currentOpacity;
@@ -1535,10 +1606,12 @@ export function GeneratorApp(props: GeneratorAppProps) {
     return base;
   }, [
     mode,
+    isUploadedImagesMode,
     isCaptionBoxMode,
     imageLibrary,
     numberBadgeColor,
     currentOpacity,
+    uploadedShowPageNumbers,
     needsOverlayOpacity,
     needsFacts,
     needsList,
@@ -1567,7 +1640,15 @@ export function GeneratorApp(props: GeneratorAppProps) {
     setError(null);
     setSuccessMessage(null);
     try {
-      const response = await fetch("/api/generate", buildJsonGenerateRequest(payload));
+      if (isUploadedImagesMode) {
+        if (!uploadedContentFiles.length) {
+          throw new Error("Upload at least one content image.");
+        }
+      }
+      const request = isUploadedImagesMode
+        ? buildMultipartGenerateRequest(payload, uploadedContentFiles, uploadedBackgroundFiles)
+        : buildJsonGenerateRequest(payload);
+      const response = await fetch("/api/generate", request);
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(detail.error || "Unable to generate PDF");
@@ -1632,13 +1713,146 @@ export function GeneratorApp(props: GeneratorAppProps) {
               onClick={() => navigateToStep(2)}
               className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
             >
-              Next: Book specs
+              {isUploadedImagesMode ? "Next: Upload images" : "Next: Book specs"}
             </button>
           </div>
         </section>
       )}
 
-      {step === 2 && (
+      {step === 2 && isUploadedImagesMode && (
+        <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Upload Template</p>
+            <h3 className="text-lg font-semibold text-zinc-900">Uploaded Image Pages</h3>
+            <p className="text-sm text-zinc-700">
+              Backgrounds fill the page. Content images stay centered inside a 0.25in inset.
+            </p>
+          </div>
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {PAGE_SIZES.map((option) => {
+                const isActive = option.value === pageSize;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handlePageSizeSelect(option.value)}
+                    className={`flex flex-col gap-1 rounded-2xl border bg-white p-4 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                      isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                    }`}
+                  >
+                    <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
+                    <span className="text-xs text-zinc-700">{option.description}</span>
+                    {isActive && <span className="text-xs font-medium text-emerald-600">Selected</span>}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium text-zinc-700">Number of pages</label>
+              <input
+                type="number"
+                min={1}
+                max={200}
+                value={pageCount}
+                onChange={(event) => {
+                  const nextValue = Number(event.target.value);
+                  setPageCount(Number.isNaN(nextValue) ? 1 : nextValue);
+                }}
+                className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <UploadedImagePicker
+              inputId="background-upload"
+              label="Background images"
+              description="Optional. Stretched to the full PDF page."
+              files={uploadedBackgroundFiles}
+              onFilesSelected={handleUploadedBackgroundFiles}
+              onAddFiles={addUploadedBackgroundFiles}
+              onRemoveFile={removeUploadedBackgroundFile}
+              onClear={() => setUploadedBackgroundFiles([])}
+            />
+            <UploadedImagePicker
+              inputId="content-upload"
+              label="Content images"
+              description="Centered and fitted with 0.25in padding."
+              files={uploadedContentFiles}
+              onFilesSelected={handleUploadedContentFiles}
+              onAddFiles={addUploadedContentFiles}
+              onRemoveFile={removeUploadedContentFile}
+              onClear={() => setUploadedContentFiles([])}
+            />
+          </div>
+          <div className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+            <label className="flex items-center justify-between gap-4">
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-zinc-900">Circle page enumeration</span>
+                <span className="block text-xs text-zinc-600">
+                  Starts on page 2. Even pages use bottom left, odd pages use bottom right.
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={uploadedShowPageNumbers}
+                onChange={(event) => setUploadedShowPageNumbers(event.target.checked)}
+                className="h-5 w-5 shrink-0 accent-black"
+              />
+            </label>
+            {uploadedShowPageNumbers ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {NUMBER_BADGE_COLOR_OPTIONS.map((option) => {
+                  const isActive = option.value === numberBadgeColor;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setNumberBadgeColor(option.value)}
+                      aria-pressed={isActive}
+                      className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                        isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <span
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white shadow-sm"
+                          style={{ backgroundColor: option.hex }}
+                        >
+                          2
+                        </span>
+                        <span className="truncate text-sm font-semibold text-zinc-900">{option.label}</span>
+                      </span>
+                      {isActive ? <span className="shrink-0 text-xs font-medium text-emerald-600">Selected</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => navigateToStep(1)}
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-semibold text-zinc-700 hover:border-zinc-400"
+            >
+              Back to templates
+            </button>
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isLoading}
+              className="w-full rounded-md bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60 sm:w-auto"
+            >
+              {isLoading ? "Generating..." : "Generate PDF"}
+            </button>
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          {successMessage && <p className="text-sm text-emerald-600">{successMessage}</p>}
+        </section>
+      )}
+
+      {step === 2 && !isUploadedImagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 2</p>
@@ -2413,7 +2627,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         </section>
       )}
 
-      {step === 3 && (
+      {step === 3 && !isUploadedImagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -2451,7 +2665,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         </section>
       )}
 
-      {step === 4 && (
+      {step === 4 && !isUploadedImagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 4</p>
@@ -2663,6 +2877,188 @@ function buildJsonGenerateRequest(payload: Record<string, unknown>): RequestInit
   };
 }
 
+function buildMultipartGenerateRequest(
+  payload: Record<string, unknown>,
+  contentFiles: File[],
+  backgroundFiles: File[]
+): RequestInit {
+  const formData = new FormData();
+  formData.append("payload", JSON.stringify(payload));
+  for (const file of contentFiles) {
+    formData.append("images", file, file.name);
+  }
+  for (const file of backgroundFiles) {
+    formData.append("backgroundImages", file, file.name);
+  }
+  return {
+    method: "POST",
+    body: formData,
+  };
+}
+
+interface UploadedImagePickerProps {
+  inputId: string;
+  label: string;
+  description: string;
+  files: File[];
+  onFilesSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onAddFiles: (files: FileList | File[] | null | undefined) => void;
+  onRemoveFile: (index: number) => void;
+  onClear: () => void;
+}
+
+function UploadedImagePicker({
+  inputId,
+  label,
+  description,
+  files,
+  onFilesSelected,
+  onAddFiles,
+  onRemoveFile,
+  onClear,
+}: UploadedImagePickerProps) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragEnter = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setIsDragging(false);
+      onAddFiles(event.dataTransfer.files);
+    },
+    [onAddFiles]
+  );
+
+  return (
+    <div className="min-w-0 space-y-3 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-zinc-900">{label}</p>
+          <p className="text-xs text-zinc-600">{description}</p>
+        </div>
+        {files.length > 0 ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <label
+        htmlFor={inputId}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center transition ${
+          isDragging ? "border-black bg-zinc-100" : "border-zinc-300 bg-white hover:border-zinc-500"
+        }`}
+      >
+        <span className="text-sm font-semibold text-zinc-900">Choose or drop images</span>
+        <span className="text-xs text-zinc-500">JPG, PNG, WEBP, GIF, TIFF, BMP, AVIF, HEIC</span>
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={UPLOAD_IMAGE_ACCEPT}
+        multiple
+        onChange={onFilesSelected}
+        className="hidden"
+      />
+      {files.length > 0 ? (
+        <ol className="grid min-w-0 gap-2">
+          {files.map((file, index) => (
+            <li
+              key={`${file.name}-${file.lastModified}-${index}`}
+              className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2"
+            >
+              <UploadedFileThumbnail file={file} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-zinc-900">
+                  {index + 1}. {file.name}
+                </p>
+                <p className="text-xs text-zinc-500">{formatFileSize(file.size)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onRemoveFile(index)}
+                className="shrink-0 rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="text-sm text-zinc-500">No images selected.</p>
+      )}
+    </div>
+  );
+}
+
+function UploadedFileThumbnail({ file }: { file: File }) {
+  const [previewUrl] = useState(() => URL.createObjectURL(file));
+
+  useEffect(() => {
+    return () => {
+      URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  return (
+    <div
+      aria-hidden="true"
+      className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100"
+    >
+      <img src={previewUrl} alt="" className="h-full w-full object-cover" draggable={false} />
+    </div>
+  );
+}
+
+function appendUploadFiles(current: File[], files: FileList | File[] | null | undefined) {
+  const nextFiles = Array.from(files ?? []).filter(isUploadImageFile);
+  if (!nextFiles.length) {
+    return current;
+  }
+  return [...current, ...nextFiles];
+}
+
+function isUploadImageFile(file: File) {
+  if (file.type.startsWith("image/")) {
+    return true;
+  }
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension ? UPLOAD_IMAGE_EXTENSIONS.has(extension) : false;
+}
+
+function formatFileSize(size: number) {
+  if (size < 1024) {
+    return `${size} B`;
+  }
+  const kilobytes = size / 1024;
+  if (kilobytes < 1024) {
+    return `${kilobytes.toFixed(1)} KB`;
+  }
+  return `${(kilobytes / 1024).toFixed(1)} MB`;
+}
+
 function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) {
   if (mode === "full-fact") {
     return (
@@ -2750,6 +3146,20 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
             <div className="h-full w-full bg-[linear-gradient(160deg,#cbd5e1_0%,#64748b_26%,#0f172a_60%,#e2e8f0_100%)]" />
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (mode === "uploaded-images") {
+    return (
+      <div
+        aria-hidden="true"
+        className="relative aspect-[1332/661] overflow-hidden rounded-t-2xl bg-[linear-gradient(135deg,#164e63_0%,#e2e8f0_52%,#f8fafc_100%)]"
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(100deg,rgba(15,23,42,0.4),transparent_46%),linear-gradient(22deg,rgba(16,185,129,0.35),transparent_42%)]" />
+        <div className="absolute left-1/2 top-1/2 aspect-[4/3] h-[62%] -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 border-white bg-[linear-gradient(140deg,#fafafa_0%,#dbeafe_45%,#fef3c7_100%)] shadow-[0_20px_45px_rgba(15,23,42,0.22)]" />
+        <div className="absolute left-[28%] top-[31%] h-5 w-24 rounded-md bg-zinc-900/20" />
+        <div className="absolute bottom-[28%] right-[29%] h-12 w-16 rounded-md bg-emerald-500/55" />
       </div>
     );
   }

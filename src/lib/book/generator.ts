@@ -1,8 +1,9 @@
-import { DEFAULT_IMAGE_LIBRARY, PageSizePreset, resolvePageSettings } from "./constants";
+import { DEFAULT_IMAGE_LIBRARY, MAX_TOTAL_PAGES, PageSizePreset, resolvePageSettings } from "./constants";
 import { parseFactsInput, parseListDescriptionInput, parseListInput, parseLooseFactsInput } from "./entry-parsers";
 import { renderBook } from "./render-book";
 import { renderFullFactBook } from "./render-full-fact";
 import { renderDictionaryBook } from "./render-dictionary";
+import { renderUploadedImagePages } from "./render-uploaded-image-pages";
 import { hexToRgb } from "./colors";
 import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
 import { FACT_STYLE, TITLE_STYLE, type TextAlignment } from "./types";
@@ -19,6 +20,7 @@ export type BookMode =
   | "fully-described-images"
   | "even-full-page-text"
   | "image-only"
+  | "uploaded-images"
   | "full-fact"
   | "dictionary";
 
@@ -39,9 +41,11 @@ export interface GenerateBookPayload {
   fullFactTitleFontId?: string;
   fullFactTitleUploadedFontBytes?: Uint8Array;
   targetImageSize?: number;
+  showPageNumbers?: boolean;
   pageSize?: PageSizePreset;
   pageCount?: number;
   imageAssets?: ImageAsset[];
+  backgroundImageAssets?: ImageAsset[];
 }
 
 export async function generateBook(payload: GenerateBookPayload) {
@@ -49,10 +53,14 @@ export async function generateBook(payload: GenerateBookPayload) {
   const opacity = clampOpacity(payload.overlayOpacity ?? 0.9);
   const numberBadgeFill = hexToRgb(getNumberBadgeColorOption(payload.numberBadgeColor).hex);
   const pageSettings = resolvePageSettings(payload.pageSize, payload.pageCount);
+  const totalPages =
+    payload.mode === "uploaded-images"
+      ? resolveUploadedImagePageCount(payload.pageCount, payload.imageAssets)
+      : pageSettings.totalPages;
   const sharedPageOptions = {
     pageWidth: pageSettings.width,
     pageHeight: pageSettings.height,
-    totalPages: pageSettings.totalPages,
+    totalPages,
   };
   const sharedImageOptions = {
     imageLibrary,
@@ -333,6 +341,15 @@ export async function generateBook(payload: GenerateBookPayload) {
         ...sharedPageOptions,
       });
     }
+    case "uploaded-images": {
+      return renderUploadedImagePages({
+        backgroundImageAssets: payload.backgroundImageAssets,
+        contentImageAssets: payload.imageAssets,
+        showPageNumbers: payload.showPageNumbers,
+        pageNumberFill: numberBadgeFill,
+        ...sharedPageOptions,
+      });
+    }
     case "full-fact": {
       const entries = parseLooseFactsInput(payload.facts ?? "");
       const factsPerPage = Math.max(1, Math.min(6, payload.factsPerPage ?? 4));
@@ -364,4 +381,10 @@ function clampOpacity(value: number) {
     return 0.9;
   }
   return Math.min(1, Math.max(0, value));
+}
+
+function resolveUploadedImagePageCount(pageCount?: number, imageAssets?: ImageAsset[]) {
+  const fallback = imageAssets?.length ? imageAssets.length : 1;
+  const raw = typeof pageCount === "number" && !Number.isNaN(pageCount) ? pageCount : fallback;
+  return Math.min(MAX_TOTAL_PAGES, Math.max(1, Math.floor(raw)));
 }
