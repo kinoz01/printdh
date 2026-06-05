@@ -47,7 +47,9 @@ const schema = z.object({
     })
     .optional(),
   targetImageSize: z.number().positive().optional(),
+  contentPadding: z.number().min(0).optional(),
   showPageNumbers: z.boolean().optional(),
+  pageNumberPosition: z.enum(["alternating", "center"]).optional(),
   pageSize: z.enum(["square", "us-letter", "hardcover"]).optional(),
   pageCount: z.number().int().min(1).max(200).optional(),
 });

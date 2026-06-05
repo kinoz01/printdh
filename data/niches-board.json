@@ -1,0 +1,46 @@
+{
+  "entries": [
+    {
+      "section": "books",
+      "value": "https://www.amazon.com/America-250-Independence-Surprising-Celebrations/dp/B0GYL95LXZ/ref=pd_sbs_d_sccl_1_6/135-4070498-6991724?pd_rd_w=xkUyl&content-id=amzn1.sym.aa738fbd-ad05-4d11-aae2-04b598db6305&pf_rd_p=aa738fbd-ad05-4d11-aae2-04b598db6305&pf_rd_r=881X0E0M0E47WN1R1E2X&pd_rd_wg=KL3J8&pd_rd_r=203e725c-84a1-40fe-9a70-4c022a0bf855&pd_rd_i=B0GYL95LXZ&psc=1",
+      "preview": {
+        "url": "https://www.amazon.com/America-250-Independence-Surprising-Celebrations/dp/B0GYL95LXZ/ref=pd_sbs_d_sccl_1_6/135-4070498-6991724?pd_rd_w=xkUyl&content-id=amzn1.sym.aa738fbd-ad05-4d11-aae2-04b598db6305&pf_rd_p=aa738fbd-ad05-4d11-aae2-04b598db6305&pf_rd_r=881X0E0M0E47WN1R1E2X&pd_rd_wg=KL3J8&pd_rd_r=203e725c-84a1-40fe-9a70-4c022a0bf855&pd_rd_i=B0GYL95LXZ&psc=1",
+        "title": "Amazon.com: America 250 – 250 Fun Facts You Didn’t Know About Independence Day: Surprising American History Trivia, July 4th Stories & Patriotic Insights – A Fun Gift Book for Teens, Adults & Family Celebrations: 9798258868107: Studio, Inkspire: Books",
+        "description": "Amazon.com: America 250 – 250 Fun Facts You Didn’t Know About Independence Day: Surprising American History Trivia, July 4th Stories & Patriotic Insights – A Fun Gift Book for Teens, Adults & Family Celebrations: 9798258868107: Studio, Inkspire: Books",
+        "siteName": "amazon.com"
+      },
+      "id": "a0fcde8c-85ff-4490-99f7-626afd2b0886",
+      "createdAt": "2026-06-05T03:09:18.869Z"
+    },
+    {
+      "section": "books",
+      "value": "https://www.amazon.com/Beginners-Fishing-Book-Kids-Pictures/dp/B0GCDB7PVZ/ref=tmm_pap_swatch_0",
+      "preview": {
+        "url": "https://www.amazon.com/Beginners-Fishing-Book-Kids-Pictures/dp/B0GCDB7PVZ/ref=tmm_pap_swatch_0",
+        "title": "A Beginner&#x27;s Fishing Book: For Kids Ages 7-12 With Pictures and Easy Tips: Coleman, Richard: 9798241107909: Amazon.com: Books",
+        "description": "A Beginner",
+        "siteName": "amazon.com"
+      },
+      "id": "8a79bdb0-c23c-47a9-b1a3-9797d4383fe0",
+      "createdAt": "2026-06-05T03:37:38.274Z"
+    },
+    {
+      "section": "ideas",
+      "value": "America 250",
+      "id": "e20cbdaf-cd36-47dc-becc-e29a65d1f0a9",
+      "createdAt": "2026-06-05T03:38:44.967Z"
+    },
+    {
+      "section": "ideas",
+      "value": "Texas stories\nhttps://texasstandard.org/stories/categories/wfstrong/",
+      "id": "7d0c3653-0fc2-4b32-85b1-23459474a3ea",
+      "createdAt": "2026-06-05T03:41:28.050Z"
+    },
+    {
+      "section": "ideas",
+      "value": "Cowboys facts/stories",
+      "id": "1d6e0e96-255c-4c56-9a03-d9ce725192ed",
+      "createdAt": "2026-06-05T03:42:20.770Z"
+    }
+  ]
+}

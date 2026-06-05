@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KDP Niches Saver</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>KDP Niches</h1>
+        <p id="page-title">Loading current tab...</p>
+      </header>
+
+      <label>
+        App URL
+        <input id="app-url" type="url" spellcheck="false" />
+      </label>
+
+      <section aria-label="Save actions">
+        <button id="save-book" type="button">Save Book</button>
+        <button id="save-author" type="button">Save Author</button>
+      </section>
+
+      <p id="status" role="status"></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

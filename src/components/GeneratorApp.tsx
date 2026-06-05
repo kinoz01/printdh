@@ -148,6 +148,7 @@ function getDefaultPageCount(pageSize: PageSizeValue) {
 type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
 type DescribedPictureTextAlignment = "center" | "left";
+type UploadedPageNumberPosition = "alternating" | "center";
 
 const UPLOAD_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/bmp,image/tiff,image/gif,image/avif,image/heic,image/heif";
@@ -789,6 +790,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [uploadedBackgroundFiles, setUploadedBackgroundFiles] = useState<File[]>([]);
   const [uploadedContentFiles, setUploadedContentFiles] = useState<File[]>([]);
   const [uploadedShowPageNumbers, setUploadedShowPageNumbers] = useState(false);
+  const [uploadedPageNumberPosition, setUploadedPageNumberPosition] =
+    useState<UploadedPageNumberPosition>("alternating");
+  const [uploadedContentPadding, setUploadedContentPadding] = useState(0.32);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -1551,9 +1555,12 @@ export function GeneratorApp(props: GeneratorAppProps) {
       base.numberBadgeColor = numberBadgeColor;
     }
     if (isUploadedImagesMode) {
+      const safeUploadedContentPadding = Number.isFinite(uploadedContentPadding) ? uploadedContentPadding : 0.32;
+      base.contentPadding = Math.max(0, safeUploadedContentPadding) * 72;
       base.showPageNumbers = uploadedShowPageNumbers;
       if (uploadedShowPageNumbers) {
         base.numberBadgeColor = numberBadgeColor;
+        base.pageNumberPosition = uploadedPageNumberPosition;
       }
     }
     if (needsOverlayOpacity) {
@@ -1611,6 +1618,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     imageLibrary,
     numberBadgeColor,
     currentOpacity,
+    uploadedContentPadding,
+    uploadedPageNumberPosition,
     uploadedShowPageNumbers,
     needsOverlayOpacity,
     needsFacts,
@@ -1725,7 +1734,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Upload Template</p>
             <h3 className="text-lg font-semibold text-zinc-900">Uploaded Image Pages</h3>
             <p className="text-sm text-zinc-700">
-              Backgrounds fill the page. Content images stay centered inside a 0.25in inset.
+              Backgrounds fill the page. Content images stay centered inside the chosen inset.
             </p>
           </div>
           <div className="space-y-4">
@@ -1748,19 +1757,36 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 );
               })}
             </div>
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium text-zinc-700">Number of pages</label>
-              <input
-                type="number"
-                min={1}
-                max={200}
-                value={pageCount}
-                onChange={(event) => {
-                  const nextValue = Number(event.target.value);
-                  setPageCount(Number.isNaN(nextValue) ? 1 : nextValue);
-                }}
-                className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-2">
+                <span className="text-sm font-medium text-zinc-700">Number of pages</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={pageCount}
+                  onChange={(event) => {
+                    const nextValue = Number(event.target.value);
+                    setPageCount(Number.isNaN(nextValue) ? 1 : nextValue);
+                  }}
+                  className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                />
+              </label>
+              <label className="flex min-w-0 flex-col gap-2">
+                <span className="text-sm font-medium text-zinc-700">Content image padding (inches)</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.01}
+                  value={uploadedContentPadding}
+                  onChange={(event) => {
+                    const nextValue = Number(event.target.value);
+                    setUploadedContentPadding(Number.isNaN(nextValue) ? 0 : Math.max(0, nextValue));
+                  }}
+                  className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                />
+                <span className="text-xs text-zinc-500">Use 0 to fit content to the full page bounds.</span>
+              </label>
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -1777,7 +1803,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <UploadedImagePicker
               inputId="content-upload"
               label="Content images"
-              description="Centered and fitted with 0.25in padding."
+              description={`Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`}
               files={uploadedContentFiles}
               onFilesSelected={handleUploadedContentFiles}
               onAddFiles={addUploadedContentFiles}
@@ -1790,7 +1816,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-zinc-900">Circle page enumeration</span>
                 <span className="block text-xs text-zinc-600">
-                  Starts on page 2. Even pages use bottom left, odd pages use bottom right.
+                  Starts on page 2. Choose alternating bottom corners or bottom center.
                 </span>
               </span>
               <input
@@ -1801,33 +1827,57 @@ export function GeneratorApp(props: GeneratorAppProps) {
               />
             </label>
             {uploadedShowPageNumbers ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {NUMBER_BADGE_COLOR_OPTIONS.map((option) => {
-                  const isActive = option.value === numberBadgeColor;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setNumberBadgeColor(option.value)}
-                      aria-pressed={isActive}
-                      className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
-                        isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
-                      }`}
-                    >
-                      <span className="flex min-w-0 items-center gap-3">
-                        <span
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white shadow-sm"
-                          style={{ backgroundColor: option.hex }}
-                        >
-                          2
+              <>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {[
+                    { value: "alternating", label: "Left / Right", description: "Even pages left, odd pages right." },
+                    { value: "center", label: "Bottom Center", description: "Every numbered page centered." },
+                  ].map((option) => {
+                    const isActive = option.value === uploadedPageNumberPosition;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setUploadedPageNumberPosition(option.value as UploadedPageNumberPosition)}
+                        aria-pressed={isActive}
+                        className={`flex min-w-0 flex-col gap-1 rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                          isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                        }`}
+                      >
+                        <span className="text-sm font-semibold text-zinc-900">{option.label}</span>
+                        <span className="text-xs text-zinc-600">{option.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {NUMBER_BADGE_COLOR_OPTIONS.map((option) => {
+                    const isActive = option.value === numberBadgeColor;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setNumberBadgeColor(option.value)}
+                        aria-pressed={isActive}
+                        className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                          isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
+                        }`}
+                      >
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span
+                            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold text-white shadow-sm"
+                            style={{ backgroundColor: option.hex }}
+                          >
+                            2
+                          </span>
+                          <span className="truncate text-sm font-semibold text-zinc-900">{option.label}</span>
                         </span>
-                        <span className="truncate text-sm font-semibold text-zinc-900">{option.label}</span>
-                      </span>
-                      {isActive ? <span className="shrink-0 text-xs font-medium text-emerald-600">Selected</span> : null}
-                    </button>
-                  );
-                })}
-              </div>
+                        {isActive ? <span className="shrink-0 text-xs font-medium text-emerald-600">Selected</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </>
             ) : null}
           </div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

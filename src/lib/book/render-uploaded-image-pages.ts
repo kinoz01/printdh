@@ -2,9 +2,11 @@ import { PDFFont, PDFDocument, PDFImage, PDFPage, rgb, StandardFonts } from "pdf
 import { PAGE_HEIGHT, PAGE_WIDTH, POINTS_PER_INCH, TOTAL_PAGES } from "./constants";
 import type { ImageAsset } from "./types";
 
-const CONTENT_PADDING = 0.25 * POINTS_PER_INCH;
+const DEFAULT_CONTENT_PADDING = 0.32 * POINTS_PER_INCH;
+const PAGE_NUMBER_PADDING = 0.35 * POINTS_PER_INCH;
 const PAGE_NUMBER_RADIUS = 0.24 * POINTS_PER_INCH;
 const PAGE_NUMBER_TEXT_COLOR = rgb(1, 1, 1);
+type PageNumberPosition = "alternating" | "center";
 
 export interface RenderUploadedImagePagesOptions {
   backgroundImageAssets?: ImageAsset[];
@@ -12,7 +14,9 @@ export interface RenderUploadedImagePagesOptions {
   pageWidth?: number;
   pageHeight?: number;
   totalPages?: number;
+  contentPadding?: number;
   showPageNumbers?: boolean;
+  pageNumberPosition?: PageNumberPosition;
   pageNumberFill?: ReturnType<typeof rgb>;
 }
 
@@ -23,7 +27,9 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     pageWidth = PAGE_WIDTH,
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
+    contentPadding = DEFAULT_CONTENT_PADDING,
     showPageNumbers = false,
+    pageNumberPosition = "alternating",
     pageNumberFill = rgb(0, 0, 0),
   } = options;
 
@@ -35,6 +41,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   const pdf = await PDFDocument.create();
   const backgroundImages = await embedImages(pdf, backgroundImageAssets);
   const contentImages = await embedImages(pdf, contentImageAssets);
+  const resolvedContentPadding = Math.max(0, contentPadding);
   const pageNumberFont = showPageNumbers ? await pdf.embedFont(StandardFonts.HelveticaBold) : null;
 
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
@@ -53,11 +60,11 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
       contentImageAssets[contentIndex],
       pageWidth,
       pageHeight,
-      CONTENT_PADDING
+      resolvedContentPadding
     );
 
     if (pageNumberFont && pageIndex > 0) {
-      drawPageNumber(page, pageIndex + 1, pageNumberFont, pageNumberFill, pageWidth);
+      drawPageNumber(page, pageIndex + 1, pageNumberFont, pageNumberFill, pageWidth, pageNumberPosition);
     }
   }
 
@@ -123,13 +130,17 @@ function drawPageNumber(
   pageNumber: number,
   font: PDFFont,
   fill: ReturnType<typeof rgb>,
-  pageWidth: number
+  pageWidth: number,
+  position: PageNumberPosition
 ) {
   const isEvenPage = pageNumber % 2 === 0;
-  const centerX = isEvenPage
-    ? CONTENT_PADDING + PAGE_NUMBER_RADIUS
-    : pageWidth - CONTENT_PADDING - PAGE_NUMBER_RADIUS;
-  const centerY = CONTENT_PADDING + PAGE_NUMBER_RADIUS;
+  const centerX =
+    position === "center"
+      ? pageWidth / 2
+      : isEvenPage
+        ? PAGE_NUMBER_PADDING + PAGE_NUMBER_RADIUS
+        : pageWidth - PAGE_NUMBER_PADDING - PAGE_NUMBER_RADIUS;
+  const centerY = PAGE_NUMBER_PADDING + PAGE_NUMBER_RADIUS;
   page.drawCircle({
     x: centerX,
     y: centerY,

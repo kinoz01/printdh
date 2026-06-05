@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "KDP Niches Saver",
+  "version": "1.0.0",
+  "description": "Save Amazon book and author pages directly to the local Niches board.",
+  "permissions": ["activeTab", "tabs", "storage"],
+  "host_permissions": ["http://localhost:3000/*", "http://localhost:3001/*"],
+  "action": {
+    "default_title": "Save to Niches",
+    "default_popup": "popup.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "kdp-niches-saver@local"
+    }
+  }
+}
