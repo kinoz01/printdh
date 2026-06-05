@@ -82,6 +82,8 @@ const EMPTY_SECTION_STATE: SectionState = {
   draft: "",
 };
 
+const ENTRY_ACCENT_COLORS = ["#93c5fd", "#a7f3d0", "#fcd34d", "#c4b5fd", "#fca5a5", "#67e8f9"];
+
 function createInitialState(): Record<NicheSection, SectionState> {
   return {
     books: { ...EMPTY_SECTION_STATE },
@@ -375,10 +377,11 @@ function NicheSectionPanel({
         {state.notice ? <p className="text-sm text-emerald-600">{state.notice}</p> : null}
 
         <div className="grid max-h-[800px] gap-3 overflow-y-auto pr-1">
-          {state.entries.map((entry) =>
+          {state.entries.map((entry, index) =>
             isLinkSection ? (
               <LinkEntryCard
                 key={entry.id}
+                accentColor={ENTRY_ACCENT_COLORS[index % ENTRY_ACCENT_COLORS.length]}
                 entry={entry}
                 deleting={state.deletingId === entry.id}
                 onDelete={() => onDelete(entry.id)}
@@ -386,6 +389,7 @@ function NicheSectionPanel({
             ) : (
               <IdeaEntryCard
                 key={entry.id}
+                accentColor={ENTRY_ACCENT_COLORS[index % ENTRY_ACCENT_COLORS.length]}
                 entry={entry}
                 deleting={state.deletingId === entry.id}
                 onDelete={() => onDelete(entry.id)}
@@ -420,17 +424,22 @@ function NicheSectionPanel({
 }
 
 function LinkEntryCard({
+  accentColor,
   entry,
   deleting,
   onDelete,
 }: {
+  accentColor: string;
   entry: NicheEntry;
   deleting: boolean;
   onDelete: () => void;
 }) {
   const preview = entry.preview;
   return (
-    <article className="grid min-w-0 gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-[6.5rem_minmax(0,1fr)_auto]">
+    <article
+      className="grid min-w-0 gap-3 rounded-xl border border-l-[6px] border-zinc-200 bg-white p-3 shadow-sm sm:grid-cols-[6.5rem_minmax(0,1fr)_auto]"
+      style={{ borderLeftColor: accentColor }}
+    >
       <a
         href={preview?.url ?? entry.value}
         target="_blank"
@@ -465,16 +474,21 @@ function LinkEntryCard({
 }
 
 function IdeaEntryCard({
+  accentColor,
   entry,
   deleting,
   onDelete,
 }: {
+  accentColor: string;
   entry: NicheEntry;
   deleting: boolean;
   onDelete: () => void;
 }) {
   return (
-    <article className="grid gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 sm:grid-cols-[minmax(0,1fr)_auto]">
+    <article
+      className="grid gap-3 rounded-xl border border-l-[6px] border-zinc-200 bg-white p-4 shadow-sm sm:grid-cols-[minmax(0,1fr)_auto]"
+      style={{ borderLeftColor: accentColor }}
+    >
       <div className="min-w-0 space-y-2">
         <p className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-800">{entry.value}</p>
         <p className="text-xs text-zinc-400">{formatDate(entry.createdAt)}</p>
