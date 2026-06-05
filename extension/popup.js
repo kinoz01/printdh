@@ -1,4 +1,5 @@
-const api = globalThis.chrome ?? globalThis.browser;
+const api = globalThis.browser ?? globalThis.chrome;
+const usesPromiseApi = Boolean(globalThis.browser);
 const appUrlInput = document.querySelector("#app-url");
 const pageTitle = document.querySelector("#page-title");
 const statusLine = document.querySelector("#status");
@@ -8,7 +9,10 @@ const DEFAULT_APP_URL = "http://localhost:3000";
 
 let activeTab = null;
 
-init();
+init().catch((error) => {
+  const message = error instanceof Error ? error.message : "Extension failed to start.";
+  setStatus(message, "error");
+});
 
 async function init() {
   const savedUrl = await storageGet("appUrl");
@@ -48,6 +52,8 @@ async function saveCurrentTab(section) {
   setStatus("Saving...", "");
 
   try {
+    const pageData = await getPageData();
+    const coverImageData = section === "books" ? await compressCoverImage(pageData.coverImageUrl || "") : "";
     const endpoint = `${normalizeAppUrl(appUrlInput.value)}/api/niches`;
     const response = await fetch(endpoint, {
       method: "POST",
@@ -55,19 +61,213 @@ async function saveCurrentTab(section) {
       body: JSON.stringify({
         section,
         value: activeTab.url,
-        title: activeTab.title || "",
+        title: pageData.title || activeTab.title || "",
+        authorName: pageData.authorName || "",
+        coverImageData,
+        coverImageUrl: pageData.coverImageUrl || "",
       }),
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       throw new Error(payload.error || `Save failed with status ${response.status}`);
     }
-    setStatus(section === "books" ? "Book saved." : "Author saved.", "ok");
+    if (payload.duplicate) {
+      setStatus(section === "books" ? "Book already saved." : "Author already saved.", "ok");
+    } else {
+      setStatus(section === "books" ? "Book saved." : "Author saved.", "ok");
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Save failed.";
     setStatus(`${message} Make sure the Next app is running.`, "error");
   } finally {
     setBusy(false);
+  }
+}
+
+async function compressCoverImage(imageUrl) {
+  if (!/^https?:\/\//i.test(imageUrl)) {
+    return "";
+  }
+  try {
+    const response = await fetch(imageUrl, { cache: "force-cache" });
+    if (!response.ok) {
+      return "";
+    }
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/") || blob.size > 5_000_000) {
+      return "";
+    }
+
+    const bitmap = await loadImage(blob);
+    const maxWidth = 180;
+    const maxHeight = 240;
+    const sourceWidth = bitmap.width || bitmap.naturalWidth;
+    const sourceHeight = bitmap.height || bitmap.naturalHeight;
+    const scale = Math.min(maxWidth / sourceWidth, maxHeight / sourceHeight, 1);
+    const width = Math.max(1, Math.round(sourceWidth * scale));
+    const height = Math.max(1, Math.round(sourceHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) {
+      return "";
+    }
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, width, height);
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    const webp = canvas.toDataURL("image/webp", 0.42);
+    if (webp.startsWith("data:image/webp")) {
+      return webp;
+    }
+    return canvas.toDataURL("image/jpeg", 0.45);
+  } catch {
+    return "";
+  }
+}
+
+async function loadImage(blob) {
+  if ("createImageBitmap" in globalThis) {
+    return createImageBitmap(blob);
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(blob);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Unable to load cover image."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+async function getPageData() {
+  try {
+    const results = await executeScript({
+      target: { tabId: activeTab.id },
+      func: collectAmazonPageData,
+    });
+    return results?.[0]?.result ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function executeScript(details) {
+  return callExtensionApi(api.scripting?.executeScript, api.scripting, [details]);
+}
+
+function collectAmazonPageData() {
+  const text = (selector) => document.querySelector(selector)?.textContent?.replace(/\s+/g, " ").trim() || "";
+  const attr = (selector, attribute) => document.querySelector(selector)?.getAttribute(attribute) || "";
+  const wrapperCoverImage = document.querySelector("#imgTagWrapperId img");
+  const coverImage =
+    wrapperCoverImage ||
+    document.querySelector("#landingImage, #imgBlkFront, #ebooksImgBlkFront, img[data-a-dynamic-image]");
+  const title =
+    text("#productTitle") ||
+    text("h1[data-testid='title']") ||
+    document.querySelector("meta[property='og:title']")?.getAttribute("content") ||
+    document.title ||
+    "";
+  const authorName =
+    text("#bylineInfo .author a") ||
+    text("#bylineInfo a.a-link-normal") ||
+    text("#bylineInfo") ||
+    text("#authorFollowHeading") ||
+    document.querySelector("meta[name='author']")?.getAttribute("content") ||
+    "";
+  const coverImageUrl =
+    imageSrc(wrapperCoverImage) ||
+    bestImageFromElement(coverImage) ||
+    attr("#imgTagWrapperId img", "src") ||
+    attr("#imgTagWrapperId img", "data-old-hires") ||
+    attr("#landingImage", "data-old-hires") ||
+    attr("#landingImage", "src") ||
+    attr("#imgBlkFront", "data-old-hires") ||
+    attr("#imgBlkFront", "src") ||
+    attr("#ebooksImgBlkFront", "src") ||
+    document.querySelector("meta[property='og:image']")?.getAttribute("content") ||
+    "";
+
+  return {
+    authorName: authorName.replace(/^by\s+/i, "").trim(),
+    coverImageUrl,
+    title: title.replace(/\s*:\s*Amazon\.[^:]+$/i, "").trim(),
+  };
+
+  function bestImageFromElement(image) {
+    if (!image) {
+      return "";
+    }
+    return (
+      toAbsoluteImageUrl(largestDynamicImage(image.getAttribute("data-a-dynamic-image") || "")) ||
+      toAbsoluteImageUrl(image.getAttribute("data-old-hires") || "") ||
+      toAbsoluteImageUrl(largestSrcSet(image.getAttribute("srcset") || "")) ||
+      toAbsoluteImageUrl(image.currentSrc || "") ||
+      toAbsoluteImageUrl(image.getAttribute("src") || "") ||
+      ""
+    );
+  }
+
+  function imageSrc(image) {
+    if (!image) {
+      return "";
+    }
+    return toAbsoluteImageUrl(image.getAttribute("src") || image.currentSrc || image.getAttribute("data-old-hires") || "");
+  }
+
+  function toAbsoluteImageUrl(value) {
+    if (!value) {
+      return "";
+    }
+    try {
+      return new URL(value, window.location.href).toString();
+    } catch {
+      return value;
+    }
+  }
+
+  function largestDynamicImage(value) {
+    if (!value) {
+      return "";
+    }
+    try {
+      return Object.entries(JSON.parse(value)).reduce(
+        (best, [url, dimensions]) => {
+          const [width, height] = Array.isArray(dimensions) ? dimensions : [];
+          const score = Number(width || 0) * Number(height || 0);
+          return score > best.score ? { score, url } : best;
+        },
+        { score: 0, url: "" }
+      ).url;
+    } catch {
+      return "";
+    }
+  }
+
+  function largestSrcSet(value) {
+    if (!value) {
+      return "";
+    }
+    return (
+      value
+        .split(",")
+        .map((item) => {
+          const [url = "", descriptor = ""] = item.trim().split(/\s+/, 2);
+          const score = Number(descriptor.replace(/[^\d.]/g, "")) || 0;
+          return { score, url };
+        })
+        .filter((item) => item.url)
+        .sort((left, right) => right.score - left.score)[0]?.url || ""
+    );
   }
 }
 
@@ -83,30 +283,48 @@ function normalizeAppUrl(value) {
 }
 
 function getActiveTab() {
-  return new Promise((resolve) => {
-    const result = api.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      resolve(tabs?.[0] ?? null);
-    });
-    if (result && typeof result.then === "function") {
-      result.then((tabs) => resolve(tabs?.[0] ?? null)).catch(() => resolve(null));
-    }
-  });
+  return callExtensionApi(api.tabs?.query, api.tabs, [{ active: true, currentWindow: true }])
+    .then((tabs) => tabs?.[0] ?? null)
+    .catch(() => null);
 }
 
 function storageGet(key) {
-  return new Promise((resolve) => {
-    const result = api.storage.local.get(key, (items) => resolve(items?.[key]));
-    if (result && typeof result.then === "function") {
-      result.then((items) => resolve(items?.[key])).catch(() => resolve(undefined));
-    }
-  });
+  return callExtensionApi(api.storage?.local?.get, api.storage?.local, [key])
+    .then((items) => items?.[key])
+    .catch(() => undefined);
 }
 
 function storageSet(key, value) {
-  return new Promise((resolve) => {
-    const result = api.storage.local.set({ [key]: value }, resolve);
-    if (result && typeof result.then === "function") {
-      result.then(resolve).catch(resolve);
+  return callExtensionApi(api.storage?.local?.set, api.storage?.local, [{ [key]: value }]).catch(() => undefined);
+}
+
+function callExtensionApi(method, context, args) {
+  if (!method || !context) {
+    return Promise.reject(new Error("Required browser extension API is unavailable."));
+  }
+
+  if (usesPromiseApi) {
+    return method.apply(context, args);
+  }
+
+  return new Promise((resolve, reject) => {
+    try {
+      const result = method.apply(context, [
+        ...args,
+        (value) => {
+          const error = api.runtime?.lastError;
+          if (error) {
+            reject(new Error(error.message));
+            return;
+          }
+          resolve(value);
+        },
+      ]);
+      if (result && typeof result.then === "function") {
+        result.then(resolve).catch(reject);
+      }
+    } catch (error) {
+      reject(error);
     }
   });
 }

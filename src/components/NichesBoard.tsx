@@ -37,6 +37,7 @@ interface ApiListResponse {
 
 interface ApiSaveResponse {
   entry: NicheEntry;
+  duplicate?: boolean;
   error?: string;
 }
 
@@ -172,6 +173,15 @@ export function NichesBoard() {
       if (!response.ok) {
         throw new Error(payload.error || "Unable to save entry");
       }
+      if (payload.duplicate) {
+        updateSection(config.section, {
+          draft: "",
+          saving: false,
+          error: null,
+          notice: "Already saved.",
+        });
+        return;
+      }
       setSections((state) => {
         const sectionState = state[config.section];
         const matchesCurrentSearch = entryMatchesSearch(payload.entry, sectionState.query);
@@ -202,6 +212,9 @@ export function NichesBoard() {
   }
 
   async function handleDelete(section: NicheSection, id: string) {
+    if (!window.confirm("Remove this saved entry?")) {
+      return;
+    }
     updateSection(section, { deletingId: id, error: null, notice: null });
     try {
       const response = await fetch(`/api/niches?id=${encodeURIComponent(id)}`, { method: "DELETE" });
@@ -361,7 +374,7 @@ function NicheSectionPanel({
         {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
         {state.notice ? <p className="text-sm text-emerald-600">{state.notice}</p> : null}
 
-        <div className="grid gap-3">
+        <div className="grid max-h-[800px] gap-3 overflow-y-auto pr-1">
           {state.entries.map((entry) =>
             isLinkSection ? (
               <LinkEntryCard
@@ -441,10 +454,9 @@ function LinkEntryCard({
           >
             {preview?.title || entry.value}
           </a>
+          {preview?.authorName ? <p className="truncate text-xs font-medium text-zinc-700">{preview.authorName}</p> : null}
           <p className="truncate text-xs text-zinc-500">{preview?.siteName || safeHost(entry.value)}</p>
         </div>
-        {preview?.description ? <p className="line-clamp-3 text-sm text-zinc-600">{preview.description}</p> : null}
-        <p className="break-all text-xs text-zinc-500">{entry.value}</p>
         <p className="text-xs text-zinc-400">{formatDate(entry.createdAt)}</p>
       </div>
       <DeleteButton deleting={deleting} onDelete={onDelete} />
@@ -490,7 +502,7 @@ function entryMatchesSearch(entry: NicheEntry, query: string) {
   if (!normalized) {
     return true;
   }
-  return [entry.value, entry.preview?.title, entry.preview?.description, entry.preview?.siteName]
+  return [entry.value, entry.preview?.title, entry.preview?.description, entry.preview?.siteName, entry.preview?.authorName]
     .filter(Boolean)
     .join(" ")
     .toLowerCase()

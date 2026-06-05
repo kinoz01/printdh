@@ -28,3 +28,5 @@ The popup defaults to `http://localhost:3000`. If Next starts on another port, c
 5. Click the extension icon, then `Save Book` or `Save Author`.
 
 Firefox temporary add-ons are removed when Firefox restarts. Load the same `manifest.json` again when needed.
+
+After changing `manifest.json`, remove the temporary add-on and load it again. Firefox does not always apply new permissions from a simple page refresh.

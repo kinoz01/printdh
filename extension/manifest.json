@@ -3,8 +3,21 @@
   "name": "KDP Niches Saver",
   "version": "1.0.0",
   "description": "Save Amazon book and author pages directly to the local Niches board.",
-  "permissions": ["activeTab", "tabs", "storage"],
-  "host_permissions": ["http://localhost:3000/*", "http://localhost:3001/*"],
+  "permissions": ["activeTab", "scripting", "tabs", "storage"],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://amazon.com/*",
+    "https://*.amazon.com/*",
+    "https://*.amazon.ca/*",
+    "https://*.amazon.co.uk/*",
+    "https://*.amazon.de/*",
+    "https://*.amazon.es/*",
+    "https://*.amazon.fr/*",
+    "https://*.amazon.it/*",
+    "https://*.media-amazon.com/*",
+    "https://*.ssl-images-amazon.com/*"
+  ],
   "action": {
     "default_title": "Save to Niches",
     "default_popup": "popup.html"

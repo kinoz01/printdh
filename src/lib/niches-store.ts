@@ -11,6 +11,7 @@ export interface NichePreview {
   description?: string;
   image?: string;
   siteName?: string;
+  authorName?: string;
 }
 
 export interface NicheEntry {
@@ -45,6 +46,21 @@ export async function addNicheEntry(entry: Omit<NicheEntry, "id" | "createdAt">)
     createdAt: new Date().toISOString(),
   };
   store.entries.push(nextEntry);
+  await writeStore(store);
+  return nextEntry;
+}
+
+export async function updateNicheEntry(id: string, patch: Partial<Pick<NicheEntry, "preview" | "value">>) {
+  const store = await readStore();
+  const index = store.entries.findIndex((entry) => entry.id === id);
+  if (index === -1) {
+    return null;
+  }
+  const nextEntry = {
+    ...store.entries[index],
+    ...patch,
+  };
+  store.entries[index] = nextEntry;
   await writeStore(store);
   return nextEntry;
 }
