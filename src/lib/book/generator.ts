@@ -42,6 +42,8 @@ export interface GenerateBookPayload {
   fullFactTitleUploadedFontBytes?: Uint8Array;
   targetImageSize?: number;
   contentPadding?: number;
+  sequentialBackgroundImages?: boolean;
+  stretchContentImages?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: "alternating" | "center";
   pageSize?: PageSizePreset;
@@ -348,6 +350,8 @@ export async function generateBook(payload: GenerateBookPayload) {
         backgroundImageAssets: payload.backgroundImageAssets,
         contentImageAssets: payload.imageAssets,
         contentPadding: payload.contentPadding,
+        sequentialBackgroundImages: payload.sequentialBackgroundImages,
+        stretchContentImages: payload.stretchContentImages,
         showPageNumbers: payload.showPageNumbers,
         pageNumberPosition: payload.pageNumberPosition,
         pageNumberFill: numberBadgeFill,

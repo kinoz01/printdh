@@ -48,6 +48,8 @@ const schema = z.object({
     .optional(),
   targetImageSize: z.number().positive().optional(),
   contentPadding: z.number().min(0).optional(),
+  sequentialBackgroundImages: z.boolean().optional(),
+  stretchContentImages: z.boolean().optional(),
   showPageNumbers: z.boolean().optional(),
   pageNumberPosition: z.enum(["alternating", "center"]).optional(),
   pageSize: z.enum(["square", "us-letter", "hardcover"]).optional(),

@@ -789,10 +789,12 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [pageCount, setPageCount] = useState(getDefaultPageCount("square"));
   const [uploadedBackgroundFiles, setUploadedBackgroundFiles] = useState<File[]>([]);
   const [uploadedContentFiles, setUploadedContentFiles] = useState<File[]>([]);
+  const [uploadedSequentialBackgroundImages, setUploadedSequentialBackgroundImages] = useState(false);
   const [uploadedShowPageNumbers, setUploadedShowPageNumbers] = useState(false);
   const [uploadedPageNumberPosition, setUploadedPageNumberPosition] =
     useState<UploadedPageNumberPosition>("alternating");
   const [uploadedContentPadding, setUploadedContentPadding] = useState(0.32);
+  const [uploadedStretchContentImages, setUploadedStretchContentImages] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -1557,6 +1559,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (isUploadedImagesMode) {
       const safeUploadedContentPadding = Number.isFinite(uploadedContentPadding) ? uploadedContentPadding : 0.32;
       base.contentPadding = Math.max(0, safeUploadedContentPadding) * 72;
+      base.sequentialBackgroundImages = uploadedSequentialBackgroundImages;
+      base.stretchContentImages = uploadedStretchContentImages;
       base.showPageNumbers = uploadedShowPageNumbers;
       if (uploadedShowPageNumbers) {
         base.numberBadgeColor = numberBadgeColor;
@@ -1620,7 +1624,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
     currentOpacity,
     uploadedContentPadding,
     uploadedPageNumberPosition,
+    uploadedSequentialBackgroundImages,
     uploadedShowPageNumbers,
+    uploadedStretchContentImages,
     needsOverlayOpacity,
     needsFacts,
     needsList,
@@ -1734,7 +1740,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Upload Template</p>
             <h3 className="text-lg font-semibold text-zinc-900">Uploaded Image Pages</h3>
             <p className="text-sm text-zinc-700">
-              Backgrounds fill the page. Content images stay centered inside the chosen inset.
+              Backgrounds fill the page. Content images can stay centered inside the inset or stretch to the page.
             </p>
           </div>
           <div className="space-y-4">
@@ -1757,7 +1763,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 );
               })}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               <label className="flex flex-col gap-2">
                 <span className="text-sm font-medium text-zinc-700">Number of pages</span>
                 <input
@@ -1779,31 +1785,74 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   min={0}
                   step={0.01}
                   value={uploadedContentPadding}
+                  disabled={uploadedStretchContentImages}
                   onChange={(event) => {
                     const nextValue = Number(event.target.value);
                     setUploadedContentPadding(Number.isNaN(nextValue) ? 0 : Math.max(0, nextValue));
                   }}
-                  className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none"
+                  className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
                 />
-                <span className="text-xs text-zinc-500">Use 0 to fit content to the full page bounds.</span>
+                <span className="text-xs text-zinc-500">
+                  {uploadedStretchContentImages
+                    ? "Ignored while stretch mode is enabled."
+                    : "Use 0 to fit content to the full page bounds."}
+                </span>
+              </label>
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-zinc-900">Stretch content images</span>
+                  <span className="block text-xs text-zinc-600">
+                    Distort images horizontally and vertically to match the PDF page size.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={uploadedStretchContentImages}
+                  onChange={(event) => setUploadedStretchContentImages(event.target.checked)}
+                  className="h-5 w-5 shrink-0 accent-black"
+                />
               </label>
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
-            <UploadedImagePicker
-              inputId="background-upload"
-              label="Background images"
-              description="Optional. Stretched to the full PDF page."
-              files={uploadedBackgroundFiles}
-              onFilesSelected={handleUploadedBackgroundFiles}
-              onAddFiles={addUploadedBackgroundFiles}
-              onRemoveFile={removeUploadedBackgroundFile}
-              onClear={() => setUploadedBackgroundFiles([])}
-            />
+            <div className="space-y-3">
+              <UploadedImagePicker
+                inputId="background-upload"
+                label="Background images"
+                description={
+                  uploadedSequentialBackgroundImages
+                    ? "Used page by page from page 1, then repeated in upload order."
+                    : "Optional. Stretched to the full PDF page."
+                }
+                files={uploadedBackgroundFiles}
+                onFilesSelected={handleUploadedBackgroundFiles}
+                onAddFiles={addUploadedBackgroundFiles}
+                onRemoveFile={removeUploadedBackgroundFile}
+                onClear={() => setUploadedBackgroundFiles([])}
+              />
+              <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold text-zinc-900">Sequential backgrounds</span>
+                  <span className="block text-xs text-zinc-600">
+                    Page 1 uses the first upload, page 2 the second, continuing in order.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={uploadedSequentialBackgroundImages}
+                  onChange={(event) => setUploadedSequentialBackgroundImages(event.target.checked)}
+                  className="h-5 w-5 shrink-0 accent-black"
+                />
+              </label>
+            </div>
             <UploadedImagePicker
               inputId="content-upload"
               label="Content images"
-              description={`Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`}
+              description={
+                uploadedStretchContentImages
+                  ? "Stretched horizontally and vertically to match the full PDF page."
+                  : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
+              }
               files={uploadedContentFiles}
               onFilesSelected={handleUploadedContentFiles}
               onAddFiles={addUploadedContentFiles}

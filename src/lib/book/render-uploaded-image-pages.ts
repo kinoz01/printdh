@@ -15,6 +15,8 @@ export interface RenderUploadedImagePagesOptions {
   pageHeight?: number;
   totalPages?: number;
   contentPadding?: number;
+  sequentialBackgroundImages?: boolean;
+  stretchContentImages?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: PageNumberPosition;
   pageNumberFill?: ReturnType<typeof rgb>;
@@ -28,6 +30,8 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     pageHeight = PAGE_HEIGHT,
     totalPages = TOTAL_PAGES,
     contentPadding = DEFAULT_CONTENT_PADDING,
+    sequentialBackgroundImages = false,
+    stretchContentImages = false,
     showPageNumbers = false,
     pageNumberPosition = "alternating",
     pageNumberFill = rgb(0, 0, 0),
@@ -47,21 +51,25 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     const page = pdf.addPage([pageWidth, pageHeight]);
     if (backgroundImages.length) {
-      const backgroundIndex = resolveBackgroundIndex(pageIndex, backgroundImages.length);
+      const backgroundIndex = resolveBackgroundIndex(pageIndex, backgroundImages.length, sequentialBackgroundImages);
       drawStretchedImage(page, backgroundImages[backgroundIndex], pageWidth, pageHeight);
     } else {
       drawWhiteBackground(page, pageWidth, pageHeight);
     }
 
     const contentIndex = pageIndex % contentImages.length;
-    drawContainedImage(
-      page,
-      contentImages[contentIndex],
-      contentImageAssets[contentIndex],
-      pageWidth,
-      pageHeight,
-      resolvedContentPadding
-    );
+    if (stretchContentImages) {
+      drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
+    } else {
+      drawContainedImage(
+        page,
+        contentImages[contentIndex],
+        contentImageAssets[contentIndex],
+        pageWidth,
+        pageHeight,
+        resolvedContentPadding
+      );
+    }
 
     if (pageNumberFont && pageIndex > 0) {
       drawPageNumber(page, pageIndex + 1, pageNumberFont, pageNumberFill, pageWidth, pageNumberPosition);
@@ -90,7 +98,10 @@ async function embedImages(pdf: PDFDocument, assets: ImageAsset[]) {
   return images;
 }
 
-function resolveBackgroundIndex(pageIndex: number, backgroundCount: number) {
+function resolveBackgroundIndex(pageIndex: number, backgroundCount: number, sequentialBackgroundImages: boolean) {
+  if (sequentialBackgroundImages) {
+    return pageIndex % backgroundCount;
+  }
   if (backgroundCount <= 1 || pageIndex === 0) {
     return 0;
   }
