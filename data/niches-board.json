@@ -91,6 +91,56 @@
       },
       "id": "ce2f5734-deba-42e7-83d7-e056007bb523",
       "createdAt": "2026-06-05T13:36:04.448Z"
+    },
+    {
+      "section": "ideas",
+      "value": "titanic facts (check trademark)",
+      "id": "8f69607c-d171-4d3f-92a3-17b4289f7622",
+      "createdAt": "2026-06-05T18:42:08.974Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B0GTPGJMDX/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=mKNdW&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=144-1663222-2207854&pd_rd_wg=DU4hG&pd_rd_r=1af3f03b-b71c-4f07-b63c-f2e99e04f794&ccs_id=33911ae8-c092-4d09-a154-b4b46631540e",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B0GTPGJMDX/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=mKNdW&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=144-1663222-2207854&pd_rd_wg=DU4hG&pd_rd_r=1af3f03b-b71c-4f07-b63c-f2e99e04f794&ccs_id=33911ae8-c092-4d09-a154-b4b46631540e",
+        "title": "Jonah Keene: books, biography, latest update",
+        "description": "Follow Jonah Keene and explore their bibliography from Amazon&#039;s Jonah Keene Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/fdmg9cdmbv9jencn8f92bheal8.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "3ff59fee-de2d-4e65-846f-31627a7fd7e0",
+      "createdAt": "2026-06-05T20:17:53.766Z"
+    },
+    {
+      "section": "ideas",
+      "value": "texas history for kids",
+      "id": "11f0f7e9-b18a-4929-8309-11ffdf7522d7",
+      "createdAt": "2026-06-05T20:29:41.120Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Unboring-Histories/author/B0FTGHRWZ7?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Unboring-Histories/author/B0FTGHRWZ7?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Unboring Histories: books, biography, latest update",
+        "description": "Follow Unboring Histories and explore their bibliography from Amazon&#039;s Unboring Histories Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/285bl5fcm1a786ud26oahcj59r.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "7580e641-d952-490d-9fa7-e19361994fec",
+      "createdAt": "2026-06-05T21:20:39.792Z"
+    },
+    {
+      "section": "ideas",
+      "value": "jenkis facts",
+      "id": "5baf583d-9841-44d3-9e22-2b54ce723b7c",
+      "createdAt": "2026-06-06T00:15:27.128Z"
+    },
+    {
+      "section": "ideas",
+      "value": "ABC for roman Empire",
+      "id": "fcaa3897-6d0d-4a79-86e8-abab15114e0f",
+      "createdAt": "2026-06-06T00:15:40.359Z"
     }
   ]
 }
