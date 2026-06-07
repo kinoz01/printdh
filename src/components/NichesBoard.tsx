@@ -527,12 +527,48 @@ function IdeaEntryCard({
       style={{ borderLeftColor: accentColor }}
     >
       <div className="min-w-0 space-y-2">
-        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-800">{entry.value}</p>
+        <p className="whitespace-pre-wrap break-words text-sm leading-6 text-zinc-800">
+          <LinkedIdeaText value={entry.value} />
+        </p>
         <p className="text-xs text-zinc-400">{formatDate(entry.createdAt)}</p>
       </div>
       <DeleteButton deleting={deleting} onDelete={onDelete} />
     </article>
   );
+}
+
+function LinkedIdeaText({ value }: { value: string }) {
+  return value.split(/(https?:\/\/[^\s<>"']+)/gi).map((part, index) => {
+    if (!/^https?:\/\//i.test(part)) {
+      return part;
+    }
+
+    const { url, trailingText } = splitTrailingUrlPunctuation(part);
+    return (
+      <span key={`${index}-${url}`}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-blue-700 underline decoration-blue-300 underline-offset-2 hover:text-blue-900"
+        >
+          {url}
+        </a>
+        {trailingText}
+      </span>
+    );
+  });
+}
+
+function splitTrailingUrlPunctuation(value: string) {
+  const match = value.match(/[.,;:!?]+$/);
+  if (!match) {
+    return { url: value, trailingText: "" };
+  }
+  return {
+    url: value.slice(0, -match[0].length),
+    trailingText: match[0],
+  };
 }
 
 function DeleteButton({ deleting, onDelete }: { deleting: boolean; onDelete: () => void }) {

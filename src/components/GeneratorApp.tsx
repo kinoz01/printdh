@@ -7,10 +7,6 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
 import {
-  loadBrowserUploadTemplateSession,
-  saveBrowserUploadTemplateSession,
-} from "@/lib/book/browser-upload-template-storage";
-import {
   DEFAULT_NUMBER_BADGE_COLOR,
   NUMBER_BADGE_COLOR_OPTIONS,
   type NumberBadgeColorKey,
@@ -153,7 +149,6 @@ type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
 type DescribedPictureTextAlignment = "center" | "left";
 type UploadedPageNumberPosition = "alternating" | "center";
-type UploadedImageStorageStatus = "loading" | "saving" | "saved" | "error";
 
 const UPLOAD_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/bmp,image/tiff,image/gif,image/avif,image/heic,image/heif";
@@ -804,10 +799,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
     useState<UploadedPageNumberPosition>("alternating");
   const [uploadedContentPadding, setUploadedContentPadding] = useState(0.32);
   const [uploadedStretchContentImages, setUploadedStretchContentImages] = useState(false);
-  const [uploadedImageStorageReady, setUploadedImageStorageReady] = useState(false);
-  const [uploadedImageStorageStatus, setUploadedImageStorageStatus] =
-    useState<UploadedImageStorageStatus>("loading");
-  const [uploadedImageStorageError, setUploadedImageStorageError] = useState<string | null>(null);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -853,9 +844,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const fullFactFontVariantInputRef = useRef<HTMLInputElement | null>(null);
   const fullyDescribedTitleFontSourceInputRef = useRef<HTMLInputElement | null>(null);
   const fullyDescribedTitleFontVariantInputRef = useRef<HTMLInputElement | null>(null);
-  const uploadedImageStorageInteractionRef = useRef(false);
-  const uploadedImageStorageQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const uploadedImageStorageVersionRef = useRef(0);
   const searchParams = useSearchParams();
   const isUploadedImagesMode = mode === "uploaded-images";
 
@@ -907,105 +895,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, [searchParams]);
 
   useEffect(() => {
-    let ignore = false;
-
-    async function restoreUploadedImageSession() {
-      try {
-        const session = await loadBrowserUploadTemplateSession();
-        if (ignore || uploadedImageStorageInteractionRef.current) {
-          return;
-        }
-        if (session) {
-          if (session.active) {
-            setMode("uploaded-images");
-          }
-          setUploadedBackgroundFiles(session.backgroundFiles);
-          setUploadedContentFiles(session.contentFiles);
-          setUploadedSequentialBackgroundImages(session.sequentialBackgroundImages);
-          setUploadedFineTuneBackgrounds(session.fineTuneBackgrounds);
-          setUploadedBackgroundlessContentImageIndexes(session.backgroundlessContentImageIndexes);
-          setUploadedShowPageNumbers(session.showPageNumbers);
-          setUploadedPageNumberPosition(session.pageNumberPosition);
-          setUploadedContentPadding(session.contentPadding);
-          setUploadedStretchContentImages(session.stretchContentImages);
-        }
-        setUploadedImageStorageStatus("saved");
-      } catch (storageError) {
-        if (!ignore) {
-          setUploadedImageStorageStatus("error");
-          setUploadedImageStorageError(
-            storageError instanceof Error ? storageError.message : "Unable to restore saved uploads."
-          );
-        }
-      } finally {
-        if (!ignore) {
-          setUploadedImageStorageReady(true);
-        }
-      }
+    if (typeof indexedDB !== "undefined") {
+      indexedDB.deleteDatabase("printdh-upload-template");
     }
-
-    void restoreUploadedImageSession();
-    return () => {
-      ignore = true;
-    };
   }, []);
-
-  useEffect(() => {
-    if (!uploadedImageStorageReady) {
-      return;
-    }
-
-    const version = uploadedImageStorageVersionRef.current + 1;
-    uploadedImageStorageVersionRef.current = version;
-    setUploadedImageStorageStatus("saving");
-    setUploadedImageStorageError(null);
-
-    const timeout = window.setTimeout(() => {
-      uploadedImageStorageQueueRef.current = uploadedImageStorageQueueRef.current
-        .catch(() => undefined)
-        .then(() =>
-          saveBrowserUploadTemplateSession({
-            active: isUploadedImagesMode,
-            backgroundFiles: uploadedBackgroundFiles,
-            contentFiles: uploadedContentFiles,
-            sequentialBackgroundImages: uploadedSequentialBackgroundImages,
-            fineTuneBackgrounds: uploadedFineTuneBackgrounds,
-            backgroundlessContentImageIndexes: uploadedBackgroundlessContentImageIndexes,
-            showPageNumbers: uploadedShowPageNumbers,
-            pageNumberPosition: uploadedPageNumberPosition,
-            contentPadding: uploadedContentPadding,
-            stretchContentImages: uploadedStretchContentImages,
-          })
-        )
-        .then(() => {
-          if (uploadedImageStorageVersionRef.current === version) {
-            setUploadedImageStorageStatus("saved");
-          }
-        })
-        .catch((storageError) => {
-          if (uploadedImageStorageVersionRef.current === version) {
-            setUploadedImageStorageStatus("error");
-            setUploadedImageStorageError(
-              storageError instanceof Error ? storageError.message : "Unable to save uploaded images."
-            );
-          }
-        });
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [
-    uploadedBackgroundFiles,
-    uploadedBackgroundlessContentImageIndexes,
-    uploadedContentFiles,
-    uploadedContentPadding,
-    uploadedFineTuneBackgrounds,
-    uploadedImageStorageReady,
-    isUploadedImagesMode,
-    uploadedPageNumberPosition,
-    uploadedSequentialBackgroundImages,
-    uploadedShowPageNumbers,
-    uploadedStretchContentImages,
-  ]);
 
   useEffect(() => {
     if (isUploadedImagesMode && uploadedContentFiles.length > 0) {
@@ -1628,13 +1521,11 @@ export function GeneratorApp(props: GeneratorAppProps) {
   );
 
   const addUploadedBackgroundFiles = useCallback((files: FileList | File[] | null | undefined) => {
-    uploadedImageStorageInteractionRef.current = true;
     const selectedFiles = Array.from(files ?? []);
     setUploadedBackgroundFiles((current) => appendUploadFiles(current, selectedFiles));
   }, []);
 
   const addUploadedContentFiles = useCallback((files: FileList | File[] | null | undefined) => {
-    uploadedImageStorageInteractionRef.current = true;
     const selectedFiles = Array.from(files ?? []);
     setUploadedContentFiles((current) => appendUploadFiles(current, selectedFiles));
   }, []);
@@ -1656,12 +1547,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
   );
 
   const removeUploadedBackgroundFile = useCallback((index: number) => {
-    uploadedImageStorageInteractionRef.current = true;
     setUploadedBackgroundFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   }, []);
 
   const removeUploadedContentFile = useCallback((index: number) => {
-    uploadedImageStorageInteractionRef.current = true;
     setUploadedContentFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
     setUploadedBackgroundlessContentImageIndexes((current) =>
       current.flatMap((selectedIndex) => {
@@ -1674,17 +1563,51 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, []);
 
   const clearUploadedContentFiles = useCallback(() => {
-    uploadedImageStorageInteractionRef.current = true;
     setUploadedContentFiles([]);
     setUploadedBackgroundlessContentImageIndexes([]);
   }, []);
 
   const toggleUploadedContentImageBackground = useCallback((index: number) => {
-    uploadedImageStorageInteractionRef.current = true;
     setUploadedBackgroundlessContentImageIndexes((current) =>
       current.includes(index) ? current.filter((selectedIndex) => selectedIndex !== index) : [...current, index]
     );
   }, []);
+
+  const toggleUploadedBackgroundlessPageParity = useCallback(
+    (parity: "odd" | "even") => {
+      const parityIndexes = uploadedContentFiles
+        .map((_, index) => index)
+        .filter((index) => (parity === "odd" ? index % 2 === 0 : index % 2 === 1));
+
+      setUploadedBackgroundlessContentImageIndexes((current) => {
+        const selectedIndexes = new Set(current);
+        const isParitySelected =
+          parityIndexes.length > 0 && parityIndexes.every((index) => selectedIndexes.has(index));
+
+        for (const index of parityIndexes) {
+          if (isParitySelected) {
+            selectedIndexes.delete(index);
+          } else {
+            selectedIndexes.add(index);
+          }
+        }
+
+        return [...selectedIndexes].sort((left, right) => left - right);
+      });
+    },
+    [uploadedContentFiles]
+  );
+
+  const uploadedBackgroundlessPageParitySelection = useMemo(() => {
+    const selectedIndexes = new Set(uploadedBackgroundlessContentImageIndexes);
+    const oddIndexes = uploadedContentFiles.map((_, index) => index).filter((index) => index % 2 === 0);
+    const evenIndexes = uploadedContentFiles.map((_, index) => index).filter((index) => index % 2 === 1);
+
+    return {
+      odd: oddIndexes.length > 0 && oddIndexes.every((index) => selectedIndexes.has(index)),
+      even: evenIndexes.length > 0 && evenIndexes.every((index) => selectedIndexes.has(index)),
+    };
+  }, [uploadedBackgroundlessContentImageIndexes, uploadedContentFiles]);
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
@@ -1813,7 +1736,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
       const request = isUploadedImagesMode
         ? buildMultipartGenerateRequest(payload, uploadedContentFiles, uploadedBackgroundFiles)
         : buildJsonGenerateRequest(payload);
-      const response = await fetch("/api/generate", request);
+      const response = await fetchWithSingleRetry("/api/generate", request);
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(detail.error || "Unable to generate PDF");
@@ -1823,11 +1746,19 @@ export function GeneratorApp(props: GeneratorAppProps) {
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = `${mode}-book.pdf`;
+      document.body.appendChild(anchor);
       anchor.click();
-      window.URL.revokeObjectURL(url);
+      anchor.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 60_000);
       setSuccessMessage("PDF generated successfully.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unexpected error");
+      setError(
+        err instanceof TypeError
+          ? "The connection was interrupted while generating the PDF. Please try again."
+          : err instanceof Error
+            ? err.message
+            : "Unexpected error"
+      );
     } finally {
       setIsLoading(false);
     }
@@ -1892,19 +1823,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <p className="text-sm text-zinc-700">
               Backgrounds fill the page. Content images can stay centered inside the inset or stretch to the page.
             </p>
-            <p
-              className={`text-xs ${
-                uploadedImageStorageStatus === "error" ? "text-red-600" : "text-zinc-500"
-              }`}
-            >
-              {uploadedImageStorageStatus === "loading"
-                ? "Restoring saved uploads..."
-                : uploadedImageStorageStatus === "saving"
-                  ? "Saving uploads in this browser..."
-                  : uploadedImageStorageStatus === "error"
-                    ? `Uploads are not being saved: ${uploadedImageStorageError ?? "Browser storage failed."}`
-                    : "Uploads and background choices are saved in this browser and restored after reload."}
-            </p>
           </div>
           <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
@@ -1950,7 +1868,6 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   value={uploadedContentPadding}
                   disabled={uploadedStretchContentImages}
                   onChange={(event) => {
-                    uploadedImageStorageInteractionRef.current = true;
                     const nextValue = Number(event.target.value);
                     setUploadedContentPadding(Number.isNaN(nextValue) ? 0 : Math.max(0, nextValue));
                   }}
@@ -1972,10 +1889,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <input
                   type="checkbox"
                   checked={uploadedStretchContentImages}
-                  onChange={(event) => {
-                    uploadedImageStorageInteractionRef.current = true;
-                    setUploadedStretchContentImages(event.target.checked);
-                  }}
+                  onChange={(event) => setUploadedStretchContentImages(event.target.checked)}
                   className="h-5 w-5 shrink-0 accent-black"
                 />
               </label>
@@ -1995,10 +1909,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 onFilesSelected={handleUploadedBackgroundFiles}
                 onAddFiles={addUploadedBackgroundFiles}
                 onRemoveFile={removeUploadedBackgroundFile}
-                onClear={() => {
-                  uploadedImageStorageInteractionRef.current = true;
-                  setUploadedBackgroundFiles([]);
-                }}
+                onClear={() => setUploadedBackgroundFiles([])}
               />
               <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                 <span className="min-w-0">
@@ -2010,10 +1921,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <input
                   type="checkbox"
                   checked={uploadedSequentialBackgroundImages}
-                  onChange={(event) => {
-                    uploadedImageStorageInteractionRef.current = true;
-                    setUploadedSequentialBackgroundImages(event.target.checked);
-                  }}
+                  onChange={(event) => setUploadedSequentialBackgroundImages(event.target.checked)}
                   className="h-5 w-5 shrink-0 accent-black"
                 />
               </label>
@@ -2027,13 +1935,41 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <input
                   type="checkbox"
                   checked={uploadedFineTuneBackgrounds}
-                  onChange={(event) => {
-                    uploadedImageStorageInteractionRef.current = true;
-                    setUploadedFineTuneBackgrounds(event.target.checked);
-                  }}
+                  onChange={(event) => setUploadedFineTuneBackgrounds(event.target.checked)}
                   className="h-5 w-5 shrink-0 accent-black"
                 />
               </label>
+              {uploadedFineTuneBackgrounds ? (
+                <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900">No background by page</p>
+                    <p className="text-xs text-zinc-600">
+                      Page 1 is odd and page 2 is even. Click again to clear that group.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["odd", "even"] as const).map((parity) => {
+                      const isActive = uploadedBackgroundlessPageParitySelection[parity];
+                      return (
+                        <button
+                          key={parity}
+                          type="button"
+                          onClick={() => toggleUploadedBackgroundlessPageParity(parity)}
+                          disabled={uploadedContentFiles.length === 0}
+                          aria-pressed={isActive}
+                          className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                            isActive
+                              ? "border-black bg-black text-white"
+                              : "border-zinc-300 bg-white text-zinc-800 hover:border-zinc-500"
+                          }`}
+                        >
+                          {parity === "odd" ? "Odd pages" : "Even pages"}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
             <UploadedImagePicker
               inputId="content-upload"
@@ -2069,10 +2005,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               <input
                 type="checkbox"
                 checked={uploadedShowPageNumbers}
-                onChange={(event) => {
-                  uploadedImageStorageInteractionRef.current = true;
-                  setUploadedShowPageNumbers(event.target.checked);
-                }}
+                onChange={(event) => setUploadedShowPageNumbers(event.target.checked)}
                 className="h-5 w-5 shrink-0 accent-black"
               />
             </label>
@@ -2086,12 +2019,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     const isActive = option.value === uploadedPageNumberPosition;
                     return (
                       <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => {
-                        uploadedImageStorageInteractionRef.current = true;
-                        setUploadedPageNumberPosition(option.value as UploadedPageNumberPosition);
-                      }}
+                        key={option.value}
+                        type="button"
+                        onClick={() => setUploadedPageNumberPosition(option.value as UploadedPageNumberPosition)}
                         aria-pressed={isActive}
                         className={`flex min-w-0 flex-col gap-1 rounded-xl border bg-white px-3 py-2 text-left shadow-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
                           isActive ? "border-black ring-1 ring-black" : "border-zinc-200 hover:border-black/40"
@@ -3178,6 +3108,18 @@ function buildJsonGenerateRequest(payload: Record<string, unknown>): RequestInit
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   };
+}
+
+async function fetchWithSingleRetry(url: string, request: RequestInit) {
+  try {
+    return await fetch(url, request);
+  } catch (error) {
+    if (!(error instanceof TypeError)) {
+      throw error;
+    }
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+    return fetch(url, request);
+  }
 }
 
 function buildMultipartGenerateRequest(

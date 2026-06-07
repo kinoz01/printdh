@@ -59,7 +59,8 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     const page = pdf.addPage([pageWidth, pageHeight]);
     const contentIndex = pageIndex % contentImages.length;
-    const shouldDrawBackground = !backgroundlessContentIndexes.has(contentIndex);
+    const isBackgroundlessContent = backgroundlessContentIndexes.has(contentIndex);
+    const shouldDrawBackground = !isBackgroundlessContent;
     if (shouldDrawBackground && backgroundImages.length) {
       const backgroundIndex = resolveBackgroundIndex(
         backgroundPageIndex,
@@ -72,7 +73,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
       drawWhiteBackground(page, pageWidth, pageHeight);
     }
 
-    if (stretchContentImages) {
+    if (stretchContentImages || isBackgroundlessContent) {
       drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
     } else {
       drawContainedImage(

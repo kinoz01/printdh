@@ -87,6 +87,10 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (isConnectionReset(error)) {
+      console.warn("PDF generation upload was interrupted by the browser.");
+      return NextResponse.json({ error: "The upload connection was interrupted. Please try again." }, { status: 499 });
+    }
     console.error("Failed to generate book", error);
     const message = error instanceof Error ? error.message : "Unknown error";
     const status = error instanceof z.ZodError || error instanceof RequestParseError ? 400 : 500;
@@ -140,4 +144,11 @@ async function readProvidedImages(formData: FormData, fieldName: string): Promis
         bytes: new Uint8Array(await file.arrayBuffer()),
       }))
   );
+}
+
+function isConnectionReset(error: unknown) {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message === "aborted" || ("code" in error && error.code === "ECONNRESET");
 }
