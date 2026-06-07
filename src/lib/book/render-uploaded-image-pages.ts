@@ -16,6 +16,8 @@ export interface RenderUploadedImagePagesOptions {
   totalPages?: number;
   contentPadding?: number;
   sequentialBackgroundImages?: boolean;
+  fineTuneBackgrounds?: boolean;
+  backgroundlessContentImageIndexes?: number[];
   stretchContentImages?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: PageNumberPosition;
@@ -31,6 +33,8 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     totalPages = TOTAL_PAGES,
     contentPadding = DEFAULT_CONTENT_PADDING,
     sequentialBackgroundImages = false,
+    fineTuneBackgrounds = false,
+    backgroundlessContentImageIndexes = [],
     stretchContentImages = false,
     showPageNumbers = false,
     pageNumberPosition = "alternating",
@@ -47,17 +51,27 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   const contentImages = await embedImages(pdf, contentImageAssets);
   const resolvedContentPadding = Math.max(0, contentPadding);
   const pageNumberFont = showPageNumbers ? await pdf.embedFont(StandardFonts.HelveticaBold) : null;
+  const backgroundlessContentIndexes = fineTuneBackgrounds
+    ? new Set(backgroundlessContentImageIndexes.filter((index) => index < contentImages.length))
+    : new Set<number>();
+  let backgroundPageIndex = 0;
 
   for (let pageIndex = 0; pageIndex < pageCount; pageIndex++) {
     const page = pdf.addPage([pageWidth, pageHeight]);
-    if (backgroundImages.length) {
-      const backgroundIndex = resolveBackgroundIndex(pageIndex, backgroundImages.length, sequentialBackgroundImages);
+    const contentIndex = pageIndex % contentImages.length;
+    const shouldDrawBackground = !backgroundlessContentIndexes.has(contentIndex);
+    if (shouldDrawBackground && backgroundImages.length) {
+      const backgroundIndex = resolveBackgroundIndex(
+        backgroundPageIndex,
+        backgroundImages.length,
+        sequentialBackgroundImages
+      );
       drawStretchedImage(page, backgroundImages[backgroundIndex], pageWidth, pageHeight);
+      backgroundPageIndex += 1;
     } else {
       drawWhiteBackground(page, pageWidth, pageHeight);
     }
 
-    const contentIndex = pageIndex % contentImages.length;
     if (stretchContentImages) {
       drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
     } else {

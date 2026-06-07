@@ -43,6 +43,8 @@ export interface GenerateBookPayload {
   targetImageSize?: number;
   contentPadding?: number;
   sequentialBackgroundImages?: boolean;
+  fineTuneBackgrounds?: boolean;
+  backgroundlessContentImageIndexes?: number[];
   stretchContentImages?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: "alternating" | "center";
@@ -351,6 +353,8 @@ export async function generateBook(payload: GenerateBookPayload) {
         contentImageAssets: payload.imageAssets,
         contentPadding: payload.contentPadding,
         sequentialBackgroundImages: payload.sequentialBackgroundImages,
+        fineTuneBackgrounds: payload.fineTuneBackgrounds,
+        backgroundlessContentImageIndexes: payload.backgroundlessContentImageIndexes,
         stretchContentImages: payload.stretchContentImages,
         showPageNumbers: payload.showPageNumbers,
         pageNumberPosition: payload.pageNumberPosition,
