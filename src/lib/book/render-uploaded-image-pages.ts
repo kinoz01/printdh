@@ -86,7 +86,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
       );
     }
 
-    if (pageNumberFont && pageIndex > 0) {
+    if (pageNumberFont && pageIndex > 0 && pageIndex < pageCount - 1) {
       drawPageNumber(page, pageIndex + 1, pageNumberFont, pageNumberFill, pageWidth, pageNumberPosition);
     }
   }

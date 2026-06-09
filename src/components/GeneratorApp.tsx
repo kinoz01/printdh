@@ -1999,7 +1999,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-zinc-900">Circle page enumeration</span>
                 <span className="block text-xs text-zinc-600">
-                  Starts on page 2. Choose alternating bottom corners or bottom center.
+                  Starts on page 2 and skips the final page. Choose alternating bottom corners or bottom center.
                 </span>
               </span>
               <input
