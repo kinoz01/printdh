@@ -4,10 +4,11 @@ import { renderBook } from "./render-book";
 import { renderFullFactBook } from "./render-full-fact";
 import { renderDictionaryBook } from "./render-dictionary";
 import { renderUploadedImagePages } from "./render-uploaded-image-pages";
+import { renderUploadedPdfPages } from "./render-uploaded-pdf-pages";
 import { hexToRgb } from "./colors";
 import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
 import { FACT_STYLE, TITLE_STYLE, type TextAlignment } from "./types";
-import type { ImageAsset } from "./types";
+import type { ImageAsset, PdfAsset } from "./types";
 
 export type BookMode =
   | "facts"
@@ -21,6 +22,7 @@ export type BookMode =
   | "even-full-page-text"
   | "image-only"
   | "uploaded-images"
+  | "uploaded-pdfs"
   | "full-fact"
   | "dictionary";
 
@@ -51,6 +53,7 @@ export interface GenerateBookPayload {
   pageSize?: PageSizePreset;
   pageCount?: number;
   imageAssets?: ImageAsset[];
+  pdfAssets?: PdfAsset[];
   backgroundImageAssets?: ImageAsset[];
 }
 
@@ -360,6 +363,23 @@ export async function generateBook(payload: GenerateBookPayload) {
         pageNumberPosition: payload.pageNumberPosition,
         pageNumberFill: numberBadgeFill,
         ...sharedPageOptions,
+      });
+    }
+    case "uploaded-pdfs": {
+      return renderUploadedPdfPages({
+        backgroundImageAssets: payload.backgroundImageAssets,
+        contentPdfAssets: payload.pdfAssets,
+        contentPadding: payload.contentPadding,
+        sequentialBackgroundImages: payload.sequentialBackgroundImages,
+        fineTuneBackgrounds: payload.fineTuneBackgrounds,
+        backgroundlessContentImageIndexes: payload.backgroundlessContentImageIndexes,
+        stretchContentImages: payload.stretchContentImages,
+        showPageNumbers: payload.showPageNumbers,
+        pageNumberPosition: payload.pageNumberPosition,
+        pageNumberFill: numberBadgeFill,
+        pageWidth: pageSettings.width,
+        pageHeight: pageSettings.height,
+        totalPages: payload.pageCount,
       });
     }
     case "full-fact": {

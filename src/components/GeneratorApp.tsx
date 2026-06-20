@@ -80,6 +80,12 @@ const MODES = [
     description: "Upload backgrounds and centered content images directly.",
     accent: "from-emerald-200 via-sky-100 to-stone-200",
   },
+  {
+    value: "uploaded-pdfs",
+    label: "Uploaded PDF Pages",
+    description: "Upload backgrounds and place PDF pages as centered content.",
+    accent: "from-cyan-200 via-zinc-100 to-amber-100",
+  },
   // {
   //   value: "list-description-even",
   //   label: "Title + Description (Even Pages)",
@@ -106,6 +112,7 @@ type ModeValue =
   | "even-full-page-text"
   | "image-only"
   | "uploaded-images"
+  | "uploaded-pdfs"
   | "full-fact"
   | "dictionary";
 
@@ -149,10 +156,23 @@ type WizardStep = 1 | 2 | 3 | 4;
 type BookFontFormat = "truetype" | "opentype";
 type DescribedPictureTextAlignment = "center" | "left";
 type UploadedPageNumberPosition = "alternating" | "center";
+type MergePdfSlot = "one" | "two";
+
+interface MergePdfInputState {
+  file: File | null;
+  pageCount: number | null;
+  error: string | null;
+}
 
 const UPLOAD_IMAGE_ACCEPT =
   "image/png,image/jpeg,image/webp,image/bmp,image/tiff,image/gif,image/avif,image/heic,image/heif";
 const UPLOAD_IMAGE_EXTENSIONS = new Set(["png", "jpg", "jpeg", "webp", "bmp", "tif", "tiff", "gif", "avif", "heic", "heif"]);
+const UPLOAD_PDF_ACCEPT = "application/pdf,.pdf";
+const EMPTY_MERGE_PDF_INPUT: MergePdfInputState = {
+  file: null,
+  pageCount: null,
+  error: null,
+};
 
 interface BookFontOption {
   id: string;
@@ -789,6 +809,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [pageCount, setPageCount] = useState(getDefaultPageCount("square"));
   const [uploadedBackgroundFiles, setUploadedBackgroundFiles] = useState<File[]>([]);
   const [uploadedContentFiles, setUploadedContentFiles] = useState<File[]>([]);
+  const [uploadedPdfFiles, setUploadedPdfFiles] = useState<File[]>([]);
+  const [uploadedPdfPageCounts, setUploadedPdfPageCounts] = useState<number[]>([]);
+  const [uploadedPdfError, setUploadedPdfError] = useState<string | null>(null);
+  const [mergePdfOne, setMergePdfOne] = useState<MergePdfInputState>(EMPTY_MERGE_PDF_INPUT);
+  const [mergePdfTwo, setMergePdfTwo] = useState<MergePdfInputState>(EMPTY_MERGE_PDF_INPUT);
+  const [isMergingPdfs, setIsMergingPdfs] = useState(false);
+  const [mergePdfError, setMergePdfError] = useState<string | null>(null);
+  const [mergePdfNotice, setMergePdfNotice] = useState<string | null>(null);
   const [uploadedSequentialBackgroundImages, setUploadedSequentialBackgroundImages] = useState(false);
   const [uploadedFineTuneBackgrounds, setUploadedFineTuneBackgrounds] = useState(false);
   const [uploadedBackgroundlessContentImageIndexes, setUploadedBackgroundlessContentImageIndexes] = useState<
@@ -846,6 +874,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const fullyDescribedTitleFontVariantInputRef = useRef<HTMLInputElement | null>(null);
   const searchParams = useSearchParams();
   const isUploadedImagesMode = mode === "uploaded-images";
+  const isUploadedPdfsMode = mode === "uploaded-pdfs";
+  const isUploadedPagesMode = isUploadedImagesMode || isUploadedPdfsMode;
+  const uploadedPdfPageCount = useMemo(
+    () => uploadedPdfPageCounts.reduce((total, count) => total + Math.max(0, count), 0),
+    [uploadedPdfPageCounts]
+  );
+  const uploadedContentPageCount = isUploadedPdfsMode ? uploadedPdfPageCount : uploadedContentFiles.length;
 
   const navigateToStep = useCallback((nextStep: WizardStep) => {
     if (typeof window === "undefined") {
@@ -865,6 +900,14 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, []);
 
   const handleModeSelect = useCallback((nextMode: ModeValue) => {
+    const isSwitchingUploadedMode =
+      mode === "uploaded-images" ||
+      mode === "uploaded-pdfs" ||
+      nextMode === "uploaded-images" ||
+      nextMode === "uploaded-pdfs";
+    if (nextMode !== mode && isSwitchingUploadedMode) {
+      setUploadedBackgroundlessContentImageIndexes([]);
+    }
     setMode(nextMode);
     if (
       nextMode === "described-pictures" ||
@@ -877,17 +920,17 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (nextMode === "even-full-page-text") {
       setEvenFullPageTextBoxHeight(getDefaultEvenFullPageTextBoxHeight());
     }
-  }, []);
+  }, [mode]);
 
   const handlePageSizeSelect = useCallback(
     (nextPageSize: PageSizeValue) => {
       const shouldResetPageCount = pageCount === getDefaultPageCount(pageSize);
       setPageSize(nextPageSize);
-      if (!isUploadedImagesMode && shouldResetPageCount) {
+      if (!isUploadedPagesMode && shouldResetPageCount) {
         setPageCount(getDefaultPageCount(nextPageSize));
       }
     },
-    [isUploadedImagesMode, pageCount, pageSize]
+    [isUploadedPagesMode, pageCount, pageSize]
   );
 
   useEffect(() => {
@@ -901,16 +944,16 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, []);
 
   useEffect(() => {
-    if (isUploadedImagesMode && uploadedContentFiles.length > 0) {
-      setPageCount(Math.min(200, Math.max(1, uploadedContentFiles.length)));
+    if (isUploadedPagesMode && uploadedContentPageCount > 0) {
+      setPageCount(Math.min(200, Math.max(1, uploadedContentPageCount)));
     }
-  }, [isUploadedImagesMode, uploadedContentFiles.length]);
+  }, [isUploadedPagesMode, uploadedContentPageCount]);
 
   useEffect(() => {
-    if (isUploadedImagesMode && step > 2) {
+    if (isUploadedPagesMode && step > 2) {
       navigateToStep(2);
     }
-  }, [isUploadedImagesMode, navigateToStep, step]);
+  }, [isUploadedPagesMode, navigateToStep, step]);
 
   const loadBrowserStoredFonts = useCallback(async () => {
     const fonts = await listBrowserFonts();
@@ -983,7 +1026,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     };
   }, [browserFonts]);
 
-  const needsOverlayOpacity = !["image-only", "dictionary", "uploaded-images"].includes(mode);
+  const needsOverlayOpacity = !["image-only", "dictionary", "uploaded-images", "uploaded-pdfs"].includes(mode);
   const needsFacts = ["facts", "facts-both", "full-fact"].includes(mode);
   const isBasicDescribedPicturesMode = ["described-pictures", "even-described-pictures"].includes(mode);
   const isFullyDescribedImagesMode = mode === "fully-described-images";
@@ -1530,6 +1573,43 @@ export function GeneratorApp(props: GeneratorAppProps) {
     setUploadedContentFiles((current) => appendUploadFiles(current, selectedFiles));
   }, []);
 
+  const addUploadedPdfFiles = useCallback(async (files: FileList | File[] | null | undefined) => {
+    const selectedFiles = Array.from(files ?? []).filter(isUploadPdfFile);
+    if (!selectedFiles.length) {
+      return;
+    }
+
+    const results = await Promise.all(
+      selectedFiles.map(async (file) => {
+        try {
+          return {
+            file,
+            pageCount: await countPdfPages(file),
+            error: "",
+          };
+        } catch (error) {
+          return {
+            file,
+            pageCount: 0,
+            error: error instanceof Error ? error.message : "Unable to read PDF.",
+          };
+        }
+      })
+    );
+    const accepted = results.filter((result) => result.pageCount > 0);
+    const rejected = results.filter((result) => result.pageCount <= 0);
+
+    if (accepted.length) {
+      setUploadedPdfFiles((current) => [...current, ...accepted.map((result) => result.file)]);
+      setUploadedPdfPageCounts((current) => [...current, ...accepted.map((result) => result.pageCount)]);
+    }
+    setUploadedPdfError(
+      rejected.length
+        ? rejected.map((result) => `${result.file.name}: ${result.error}`).join(" ")
+        : null
+    );
+  }, []);
+
   const handleUploadedBackgroundFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
       addUploadedBackgroundFiles(event.target.files);
@@ -1544,6 +1624,79 @@ export function GeneratorApp(props: GeneratorAppProps) {
       event.target.value = "";
     },
     [addUploadedContentFiles]
+  );
+
+  const handleUploadedPdfFiles = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      void addUploadedPdfFiles(event.target.files);
+      event.target.value = "";
+    },
+    [addUploadedPdfFiles]
+  );
+
+  const setMergePdfInput = useCallback((slot: MergePdfSlot, nextState: MergePdfInputState) => {
+    if (slot === "one") {
+      setMergePdfOne(nextState);
+      return;
+    }
+    setMergePdfTwo(nextState);
+  }, []);
+
+  const readMergePdfInput = useCallback(
+    async (slot: MergePdfSlot, file: File | null | undefined) => {
+      setMergePdfError(null);
+      setMergePdfNotice(null);
+      if (!file) {
+        setMergePdfInput(slot, EMPTY_MERGE_PDF_INPUT);
+        return;
+      }
+      if (!isUploadPdfFile(file)) {
+        setMergePdfInput(slot, {
+          file: null,
+          pageCount: null,
+          error: "Choose a PDF file.",
+        });
+        return;
+      }
+
+      setMergePdfInput(slot, {
+        file,
+        pageCount: null,
+        error: null,
+      });
+
+      try {
+        const pageCount = await countPdfPages(file);
+        setMergePdfInput(slot, {
+          file,
+          pageCount,
+          error: null,
+        });
+      } catch (error) {
+        setMergePdfInput(slot, {
+          file: null,
+          pageCount: null,
+          error: error instanceof Error ? error.message : "Unable to read PDF.",
+        });
+      }
+    },
+    [setMergePdfInput]
+  );
+
+  const handleMergePdfOneFile = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      void readMergePdfInput("one", event.target.files?.[0] ?? null);
+      event.target.value = "";
+    },
+    [readMergePdfInput]
+  );
+
+  const handleMergePdfTwoFile = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      void readMergePdfInput("two", event.target.files?.[0] ?? null);
+      event.target.value = "";
+    },
+    [readMergePdfInput]
   );
 
   const removeUploadedBackgroundFile = useCallback((index: number) => {
@@ -1562,8 +1715,35 @@ export function GeneratorApp(props: GeneratorAppProps) {
     );
   }, []);
 
+  const removeUploadedPdfFile = useCallback(
+    (index: number) => {
+      const removedPageStart = uploadedPdfPageCounts
+        .slice(0, index)
+        .reduce((total, count) => total + Math.max(0, count), 0);
+      const removedPageCount = Math.max(0, uploadedPdfPageCounts[index] ?? 0);
+      setUploadedPdfFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+      setUploadedPdfPageCounts((current) => current.filter((_, fileIndex) => fileIndex !== index));
+      setUploadedBackgroundlessContentImageIndexes((current) =>
+        current.flatMap((selectedIndex) => {
+          if (selectedIndex >= removedPageStart && selectedIndex < removedPageStart + removedPageCount) {
+            return [];
+          }
+          return [selectedIndex > removedPageStart ? selectedIndex - removedPageCount : selectedIndex];
+        })
+      );
+    },
+    [uploadedPdfPageCounts]
+  );
+
   const clearUploadedContentFiles = useCallback(() => {
     setUploadedContentFiles([]);
+    setUploadedBackgroundlessContentImageIndexes([]);
+  }, []);
+
+  const clearUploadedPdfFiles = useCallback(() => {
+    setUploadedPdfFiles([]);
+    setUploadedPdfPageCounts([]);
+    setUploadedPdfError(null);
     setUploadedBackgroundlessContentImageIndexes([]);
   }, []);
 
@@ -1575,9 +1755,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
   const toggleUploadedBackgroundlessPageParity = useCallback(
     (parity: "odd" | "even") => {
-      const parityIndexes = uploadedContentFiles
-        .map((_, index) => index)
-        .filter((index) => (parity === "odd" ? index % 2 === 0 : index % 2 === 1));
+      const parityIndexes = Array.from({ length: uploadedContentPageCount }, (_, index) => index).filter((index) =>
+        parity === "odd" ? index % 2 === 0 : index % 2 === 1
+      );
 
       setUploadedBackgroundlessContentImageIndexes((current) => {
         const selectedIndexes = new Set(current);
@@ -1595,23 +1775,24 @@ export function GeneratorApp(props: GeneratorAppProps) {
         return [...selectedIndexes].sort((left, right) => left - right);
       });
     },
-    [uploadedContentFiles]
+    [uploadedContentPageCount]
   );
 
   const uploadedBackgroundlessPageParitySelection = useMemo(() => {
     const selectedIndexes = new Set(uploadedBackgroundlessContentImageIndexes);
-    const oddIndexes = uploadedContentFiles.map((_, index) => index).filter((index) => index % 2 === 0);
-    const evenIndexes = uploadedContentFiles.map((_, index) => index).filter((index) => index % 2 === 1);
+    const contentIndexes = Array.from({ length: uploadedContentPageCount }, (_, index) => index);
+    const oddIndexes = contentIndexes.filter((index) => index % 2 === 0);
+    const evenIndexes = contentIndexes.filter((index) => index % 2 === 1);
 
     return {
       odd: oddIndexes.length > 0 && oddIndexes.every((index) => selectedIndexes.has(index)),
       even: evenIndexes.length > 0 && evenIndexes.every((index) => selectedIndexes.has(index)),
     };
-  }, [uploadedBackgroundlessContentImageIndexes, uploadedContentFiles]);
+  }, [uploadedBackgroundlessContentImageIndexes, uploadedContentPageCount]);
 
   const payload = useMemo(() => {
     const safePageCount = Number.isFinite(pageCount) ? pageCount : 59;
-    const minPageCount = isUploadedImagesMode ? 1 : 4;
+    const minPageCount = isUploadedPagesMode ? 1 : 4;
     const safeDescribedPictureMaxBoxWidth = getSafeDescribedPictureMaxBoxWidth(describedPictureMaxBoxWidth, mode);
     const safeEvenFullPageTextBoxHeight = getSafeEvenFullPageTextBoxHeight(evenFullPageTextBoxHeight);
     const base: Record<string, unknown> = {
@@ -1623,7 +1804,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     if (supportsCircleColor) {
       base.numberBadgeColor = numberBadgeColor;
     }
-    if (isUploadedImagesMode) {
+    if (isUploadedPagesMode) {
       const safeUploadedContentPadding = Number.isFinite(uploadedContentPadding) ? uploadedContentPadding : 0.32;
       base.contentPadding = Math.max(0, safeUploadedContentPadding) * 72;
       base.sequentialBackgroundImages = uploadedSequentialBackgroundImages;
@@ -1688,7 +1869,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     return base;
   }, [
     mode,
-    isUploadedImagesMode,
+    isUploadedPagesMode,
     isCaptionBoxMode,
     imageLibrary,
     numberBadgeColor,
@@ -1723,6 +1904,26 @@ export function GeneratorApp(props: GeneratorAppProps) {
     supportsCircleColor,
   ]);
 
+  async function handleMergePdfPair() {
+    setMergePdfError(null);
+    setMergePdfNotice(null);
+    if (!mergePdfOne.file || !mergePdfTwo.file) {
+      setMergePdfError("Upload both PDFs before merging.");
+      return;
+    }
+
+    setIsMergingPdfs(true);
+    try {
+      const mergedBytes = await mergePdfPairWithFirstTwoFromFirstPdf(mergePdfOne.file, mergePdfTwo.file);
+      downloadPdfBytes(mergedBytes, buildMergedPdfFileName(mergePdfOne.file.name, mergePdfTwo.file.name));
+      setMergePdfNotice("Merged PDF downloaded.");
+    } catch (error) {
+      setMergePdfError(error instanceof Error ? error.message : "Unable to merge PDFs.");
+    } finally {
+      setIsMergingPdfs(false);
+    }
+  }
+
   async function handleGenerate() {
     setIsLoading(true);
     setError(null);
@@ -1733,8 +1934,18 @@ export function GeneratorApp(props: GeneratorAppProps) {
           throw new Error("Upload at least one content image.");
         }
       }
-      const request = isUploadedImagesMode
-        ? buildMultipartGenerateRequest(payload, uploadedContentFiles, uploadedBackgroundFiles)
+      if (isUploadedPdfsMode) {
+        if (!uploadedPdfFiles.length) {
+          throw new Error("Upload at least one content PDF.");
+        }
+      }
+      const request = isUploadedPagesMode
+        ? buildMultipartGenerateRequest(
+            payload,
+            isUploadedPdfsMode ? uploadedPdfFiles : uploadedContentFiles,
+            uploadedBackgroundFiles,
+            isUploadedPdfsMode ? "pdfs" : "images"
+          )
         : buildJsonGenerateRequest(payload);
       const response = await fetchWithSingleRetry("/api/generate", request);
       if (!response.ok) {
@@ -1809,19 +2020,26 @@ export function GeneratorApp(props: GeneratorAppProps) {
               onClick={() => navigateToStep(2)}
               className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-zinc-800"
             >
-              {isUploadedImagesMode ? "Next: Upload images" : "Next: Book specs"}
+              {isUploadedPagesMode
+                ? isUploadedPdfsMode
+                  ? "Next: Upload PDFs"
+                  : "Next: Upload images"
+                : "Next: Book specs"}
             </button>
           </div>
         </section>
       )}
 
-      {step === 2 && isUploadedImagesMode && (
+      {step === 2 && isUploadedPagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Upload Template</p>
-            <h3 className="text-lg font-semibold text-zinc-900">Uploaded Image Pages</h3>
+            <h3 className="text-lg font-semibold text-zinc-900">
+              {isUploadedPdfsMode ? "Uploaded PDF Pages" : "Uploaded Image Pages"}
+            </h3>
             <p className="text-sm text-zinc-700">
-              Backgrounds fill the page. Content images can stay centered inside the inset or stretch to the page.
+              Backgrounds fill the page. Content {isUploadedPdfsMode ? "PDF pages" : "images"} can stay centered
+              inside the inset or stretch to the page.
             </p>
           </div>
           <div className="space-y-4">
@@ -1860,7 +2078,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 />
               </label>
               <label className="flex min-w-0 flex-col gap-2">
-                <span className="text-sm font-medium text-zinc-700">Content image padding (inches)</span>
+                <span className="text-sm font-medium text-zinc-700">
+                  Content {isUploadedPdfsMode ? "PDF" : "image"} padding (inches)
+                </span>
                 <input
                   type="number"
                   min={0}
@@ -1881,9 +2101,12 @@ export function GeneratorApp(props: GeneratorAppProps) {
               </label>
               <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-zinc-900">Stretch content images</span>
+                  <span className="block text-sm font-semibold text-zinc-900">
+                    Stretch content {isUploadedPdfsMode ? "PDF pages" : "images"}
+                  </span>
                   <span className="block text-xs text-zinc-600">
-                    Distort images horizontally and vertically to match the PDF page size.
+                    Distort content {isUploadedPdfsMode ? "PDF pages" : "images"} horizontally and vertically to match
+                    the PDF page size.
                   </span>
                 </span>
                 <input
@@ -1929,7 +2152,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <span className="min-w-0">
                   <span className="block text-sm font-semibold text-zinc-900">Fine-tune backgrounds</span>
                   <span className="block text-xs text-zinc-600">
-                    Choose content images that should use no background. Their background is kept for the next image.
+                    Choose content pages that should use no background. Their background is kept for the next page.
                   </span>
                 </span>
                 <input
@@ -1955,7 +2178,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                           key={parity}
                           type="button"
                           onClick={() => toggleUploadedBackgroundlessPageParity(parity)}
-                          disabled={uploadedContentFiles.length === 0}
+                          disabled={uploadedContentPageCount === 0}
                           aria-pressed={isActive}
                           className={`rounded-lg border px-3 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                             isActive
@@ -1971,29 +2194,80 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 </div>
               ) : null}
             </div>
-            <UploadedImagePicker
-              inputId="content-upload"
-              label="Content images"
-              description={
-                uploadedStretchContentImages
-                  ? "Stretched horizontally and vertically to match the full PDF page."
-                  : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
-              }
-              files={uploadedContentFiles}
-              onFilesSelected={handleUploadedContentFiles}
-              onAddFiles={addUploadedContentFiles}
-              onRemoveFile={removeUploadedContentFile}
-              onClear={clearUploadedContentFiles}
-              selectableIndexes={
-                uploadedFineTuneBackgrounds
-                  ? {
-                      selected: uploadedBackgroundlessContentImageIndexes,
-                      onToggle: toggleUploadedContentImageBackground,
-                    }
-                  : undefined
-              }
-            />
+            {isUploadedPdfsMode ? (
+              <div className="space-y-3">
+                <UploadedPdfPicker
+                  inputId="content-pdf-upload"
+                  label="Content PDFs"
+                  description={
+                    uploadedStretchContentImages
+                      ? "Every PDF page is stretched horizontally and vertically to match the full PDF page."
+                      : `Every PDF page is centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
+                  }
+                  files={uploadedPdfFiles}
+                  pageCounts={uploadedPdfPageCounts}
+                  error={uploadedPdfError}
+                  onFilesSelected={handleUploadedPdfFiles}
+                  onAddFiles={addUploadedPdfFiles}
+                  onRemoveFile={removeUploadedPdfFile}
+                  onClear={clearUploadedPdfFiles}
+                />
+                {uploadedFineTuneBackgrounds ? (
+                  <UploadedPdfPageBackgroundSelector
+                    files={uploadedPdfFiles}
+                    pageCounts={uploadedPdfPageCounts}
+                    selectedIndexes={uploadedBackgroundlessContentImageIndexes}
+                    onToggle={toggleUploadedContentImageBackground}
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <UploadedImagePicker
+                inputId="content-upload"
+                label="Content images"
+                description={
+                  uploadedStretchContentImages
+                    ? "Stretched horizontally and vertically to match the full PDF page."
+                    : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
+                }
+                files={uploadedContentFiles}
+                onFilesSelected={handleUploadedContentFiles}
+                onAddFiles={addUploadedContentFiles}
+                onRemoveFile={removeUploadedContentFile}
+                onClear={clearUploadedContentFiles}
+                selectableIndexes={
+                  uploadedFineTuneBackgrounds
+                    ? {
+                        selected: uploadedBackgroundlessContentImageIndexes,
+                        onToggle: toggleUploadedContentImageBackground,
+                      }
+                    : undefined
+                }
+              />
+            )}
           </div>
+          {isUploadedPdfsMode ? (
+            <PdfPairMergeTool
+              pdfOne={mergePdfOne}
+              pdfTwo={mergePdfTwo}
+              isMerging={isMergingPdfs}
+              error={mergePdfError}
+              notice={mergePdfNotice}
+              onPdfOneSelected={handleMergePdfOneFile}
+              onPdfTwoSelected={handleMergePdfTwoFile}
+              onClearPdfOne={() => {
+                setMergePdfOne(EMPTY_MERGE_PDF_INPUT);
+                setMergePdfError(null);
+                setMergePdfNotice(null);
+              }}
+              onClearPdfTwo={() => {
+                setMergePdfTwo(EMPTY_MERGE_PDF_INPUT);
+                setMergePdfError(null);
+                setMergePdfNotice(null);
+              }}
+              onMerge={() => void handleMergePdfPair()}
+            />
+          ) : null}
           <div className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
             <label className="flex items-center justify-between gap-4">
               <span className="min-w-0">
@@ -2085,7 +2359,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         </section>
       )}
 
-      {step === 2 && !isUploadedImagesMode && (
+      {step === 2 && !isUploadedPagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 2</p>
@@ -2860,7 +3134,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         </section>
       )}
 
-      {step === 3 && !isUploadedImagesMode && (
+      {step === 3 && !isUploadedPagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <button
@@ -2898,7 +3172,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         </section>
       )}
 
-      {step === 4 && !isUploadedImagesMode && (
+      {step === 4 && !isUploadedPagesMode && (
         <section className="space-y-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-700">Step 4</p>
@@ -3125,12 +3399,13 @@ async function fetchWithSingleRetry(url: string, request: RequestInit) {
 function buildMultipartGenerateRequest(
   payload: Record<string, unknown>,
   contentFiles: File[],
-  backgroundFiles: File[]
+  backgroundFiles: File[],
+  contentFieldName = "images"
 ): RequestInit {
   const formData = new FormData();
   formData.append("payload", JSON.stringify(payload));
   for (const file of contentFiles) {
-    formData.append("images", file, file.name);
+    formData.append(contentFieldName, file, file.name);
   }
   for (const file of backgroundFiles) {
     formData.append("backgroundImages", file, file.name);
@@ -3274,6 +3549,334 @@ function UploadedImagePicker({
   );
 }
 
+function PdfPairMergeTool({
+  pdfOne,
+  pdfTwo,
+  isMerging,
+  error,
+  notice,
+  onPdfOneSelected,
+  onPdfTwoSelected,
+  onClearPdfOne,
+  onClearPdfTwo,
+  onMerge,
+}: {
+  pdfOne: MergePdfInputState;
+  pdfTwo: MergePdfInputState;
+  isMerging: boolean;
+  error: string | null;
+  notice: string | null;
+  onPdfOneSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onPdfTwoSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClearPdfOne: () => void;
+  onClearPdfTwo: () => void;
+  onMerge: () => void;
+}) {
+  const canMerge = Boolean(
+    pdfOne.file && pdfTwo.file && pdfOne.pageCount && pdfTwo.pageCount && !pdfOne.error && !pdfTwo.error
+  );
+
+  return (
+    <section className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+      <div className="space-y-1">
+        <h4 className="text-sm font-semibold text-zinc-900">Merge two PDFs</h4>
+        <p className="text-xs text-zinc-600">
+          Output order: PDF 1 page 1, PDF 1 page 2, PDF 2 page 1, PDF 1 page 3, PDF 2 page 2, continuing alternately.
+        </p>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        <MergePdfPickerCard
+          inputId="merge-pdf-one"
+          label="PDF 1"
+          state={pdfOne}
+          onFileSelected={onPdfOneSelected}
+          onClear={onClearPdfOne}
+        />
+        <MergePdfPickerCard
+          inputId="merge-pdf-two"
+          label="PDF 2"
+          state={pdfTwo}
+          onFileSelected={onPdfTwoSelected}
+          onClear={onClearPdfTwo}
+        />
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-h-5">
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {notice ? <p className="text-sm text-emerald-600">{notice}</p> : null}
+        </div>
+        <button
+          type="button"
+          onClick={onMerge}
+          disabled={!canMerge || isMerging}
+          className="rounded-md bg-black px-4 py-2 text-sm font-semibold text-white transition hover:bg-zinc-800 disabled:opacity-60"
+        >
+          {isMerging ? "Merging..." : "Merge & Download"}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function MergePdfPickerCard({
+  inputId,
+  label,
+  state,
+  onFileSelected,
+  onClear,
+}: {
+  inputId: string;
+  label: string;
+  state: MergePdfInputState;
+  onFileSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="grid min-w-0 gap-3 rounded-xl border border-zinc-200 bg-white p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-zinc-900">{label}</p>
+          {state.file ? (
+            <p className="truncate text-xs text-zinc-500">
+              {state.file.name} · {formatFileSize(state.file.size)}
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-500">No PDF selected.</p>
+          )}
+        </div>
+        {state.file ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <label
+        htmlFor={inputId}
+        className="flex min-h-20 cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-center text-sm font-semibold text-zinc-800 transition hover:border-zinc-500"
+      >
+        Choose PDF
+      </label>
+      <input id={inputId} type="file" accept={UPLOAD_PDF_ACCEPT} onChange={onFileSelected} className="hidden" />
+      {state.pageCount ? (
+        <p className="text-xs font-medium text-zinc-700">
+          {state.pageCount} {state.pageCount === 1 ? "page" : "pages"}
+        </p>
+      ) : null}
+      {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
+    </div>
+  );
+}
+
+interface UploadedPdfPickerProps {
+  inputId: string;
+  label: string;
+  description: string;
+  files: File[];
+  pageCounts: number[];
+  error: string | null;
+  onFilesSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onAddFiles: (files: FileList | File[] | null | undefined) => void | Promise<void>;
+  onRemoveFile: (index: number) => void;
+  onClear: () => void;
+}
+
+function UploadedPdfPicker({
+  inputId,
+  label,
+  description,
+  files,
+  pageCounts,
+  error,
+  onFilesSelected,
+  onAddFiles,
+  onRemoveFile,
+  onClear,
+}: UploadedPdfPickerProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const totalPages = pageCounts.reduce((total, count) => total + Math.max(0, count), 0);
+
+  const handleDragEnter = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setIsDragging(false);
+      void onAddFiles(event.dataTransfer.files);
+    },
+    [onAddFiles]
+  );
+
+  return (
+    <div className="min-w-0 space-y-3 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-sm font-semibold text-zinc-900">{label}</p>
+          <p className="text-xs text-zinc-600">{description}</p>
+          {totalPages > 0 ? (
+            <p className="text-xs font-medium text-zinc-700">
+              {totalPages} total {totalPages === 1 ? "page" : "pages"}
+            </p>
+          ) : null}
+        </div>
+        {files.length > 0 ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+          >
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <label
+        htmlFor={inputId}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`flex min-h-32 flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center transition ${
+          isDragging ? "border-black bg-zinc-100" : "border-zinc-300 bg-white hover:border-zinc-500"
+        }`}
+      >
+        <span className="text-sm font-semibold text-zinc-900">Choose or drop PDFs</span>
+        <span className="text-xs text-zinc-500">Single-page or multi-page PDF files</span>
+      </label>
+      <input
+        id={inputId}
+        type="file"
+        accept={UPLOAD_PDF_ACCEPT}
+        multiple
+        onChange={onFilesSelected}
+        className="hidden"
+      />
+      {files.length > 0 ? (
+        <ol className="grid min-w-0 gap-2">
+          {files.map((file, index) => {
+            const pageCount = pageCounts[index] ?? 0;
+            return (
+              <li
+                key={`${file.name}-${file.lastModified}-${index}`}
+                className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2"
+              >
+                <UploadedPdfThumbnail />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-900">
+                    {index + 1}. {file.name}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    {formatFileSize(file.size)} · {pageCount} {pageCount === 1 ? "page" : "pages"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onRemoveFile(index)}
+                  className="shrink-0 rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                >
+                  Remove
+                </button>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p className="text-sm text-zinc-500">No PDFs selected.</p>
+      )}
+      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function UploadedPdfPageBackgroundSelector({
+  files,
+  pageCounts,
+  selectedIndexes,
+  onToggle,
+}: {
+  files: File[];
+  pageCounts: number[];
+  selectedIndexes: number[];
+  onToggle: (index: number) => void;
+}) {
+  const pageStarts = pageCounts.map((_, index) =>
+    pageCounts.slice(0, index).reduce((total, count) => total + Math.max(0, count), 0)
+  );
+  const pages = files.flatMap((file, fileIndex) =>
+    Array.from({ length: pageCounts[fileIndex] ?? 0 }, (_, sourcePageIndex) => {
+      return {
+        fileName: file.name,
+        globalPageIndex: (pageStarts[fileIndex] ?? 0) + sourcePageIndex,
+        sourcePageIndex,
+      };
+    })
+  );
+
+  if (!pages.length) {
+    return null;
+  }
+
+  return (
+    <div className="space-y-2 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+      <div>
+        <p className="text-sm font-semibold text-zinc-900">No background by PDF page</p>
+        <p className="text-xs text-zinc-600">PDF pages are listed in upload order.</p>
+      </div>
+      <div className="grid max-h-72 gap-2 overflow-y-auto pr-1">
+        {pages.map((page) => {
+          const selected = selectedIndexes.includes(page.globalPageIndex);
+          return (
+            <label
+              key={`${page.fileName}-${page.globalPageIndex}`}
+              className="flex min-w-0 items-center gap-3 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm"
+            >
+              <input
+                type="checkbox"
+                checked={selected}
+                onChange={() => onToggle(page.globalPageIndex)}
+                className="h-4 w-4 shrink-0 accent-black"
+              />
+              <span className="min-w-0">
+                <span className="block font-medium text-zinc-900">Page {page.globalPageIndex + 1}</span>
+                <span className="block truncate text-xs text-zinc-500">
+                  {page.fileName}, PDF page {page.sourcePageIndex + 1}
+                </span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function UploadedPdfThumbnail() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border border-zinc-200 bg-white text-[11px] font-black text-red-700"
+    >
+      PDF
+    </div>
+  );
+}
+
 function UploadedFileThumbnail({ file }: { file: File }) {
   const [previewUrl] = useState(() => URL.createObjectURL(file));
 
@@ -3307,6 +3910,109 @@ function isUploadImageFile(file: File) {
   }
   const extension = file.name.split(".").pop()?.toLowerCase();
   return extension ? UPLOAD_IMAGE_EXTENSIONS.has(extension) : false;
+}
+
+function isUploadPdfFile(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+async function countPdfPages(file: File) {
+  const { PDFDocument } = await import("pdf-lib");
+  const pdf = await PDFDocument.load(await file.arrayBuffer(), { ignoreEncryption: true });
+  const pageCount = pdf.getPageCount();
+  if (pageCount < 1) {
+    throw new Error("PDF does not contain any pages.");
+  }
+  return pageCount;
+}
+
+async function mergePdfPairWithFirstTwoFromFirstPdf(pdfOneFile: File, pdfTwoFile: File) {
+  const { PDFDocument } = await import("pdf-lib");
+  const [pdfOneBytes, pdfTwoBytes] = await Promise.all([pdfOneFile.arrayBuffer(), pdfTwoFile.arrayBuffer()]);
+  const [pdfOne, pdfTwo] = await Promise.all([
+    PDFDocument.load(pdfOneBytes, { ignoreEncryption: true }),
+    PDFDocument.load(pdfTwoBytes, { ignoreEncryption: true }),
+  ]);
+  const mergedPdf = await PDFDocument.create();
+  const pdfOnePageCount = pdfOne.getPageCount();
+  const pdfTwoPageCount = pdfTwo.getPageCount();
+  if (pdfOnePageCount < 1 || pdfTwoPageCount < 1) {
+    throw new Error("Both PDFs must contain at least one page.");
+  }
+
+  const pdfOnePages = await mergedPdf.copyPages(pdfOne, Array.from({ length: pdfOnePageCount }, (_, index) => index));
+  const pdfTwoPages = await mergedPdf.copyPages(pdfTwo, Array.from({ length: pdfTwoPageCount }, (_, index) => index));
+  for (const item of buildPdfPairMergeOrder(pdfOnePageCount, pdfTwoPageCount)) {
+    mergedPdf.addPage(item.source === "one" ? pdfOnePages[item.pageIndex] : pdfTwoPages[item.pageIndex]);
+  }
+
+  return mergedPdf.save();
+}
+
+function buildPdfPairMergeOrder(pdfOnePageCount: number, pdfTwoPageCount: number) {
+  const order: Array<{ source: MergePdfSlot; pageIndex: number }> = [];
+  let pdfOneIndex = 0;
+  let pdfTwoIndex = 0;
+
+  while (pdfOneIndex < Math.min(2, pdfOnePageCount)) {
+    order.push({ source: "one", pageIndex: pdfOneIndex });
+    pdfOneIndex += 1;
+  }
+
+  let nextSource: MergePdfSlot = "two";
+  while (pdfOneIndex < pdfOnePageCount || pdfTwoIndex < pdfTwoPageCount) {
+    if (nextSource === "two") {
+      if (pdfTwoIndex < pdfTwoPageCount) {
+        order.push({ source: "two", pageIndex: pdfTwoIndex });
+        pdfTwoIndex += 1;
+      } else if (pdfOneIndex < pdfOnePageCount) {
+        order.push({ source: "one", pageIndex: pdfOneIndex });
+        pdfOneIndex += 1;
+      }
+      nextSource = "one";
+      continue;
+    }
+
+    if (pdfOneIndex < pdfOnePageCount) {
+      order.push({ source: "one", pageIndex: pdfOneIndex });
+      pdfOneIndex += 1;
+    } else if (pdfTwoIndex < pdfTwoPageCount) {
+      order.push({ source: "two", pageIndex: pdfTwoIndex });
+      pdfTwoIndex += 1;
+    }
+    nextSource = "two";
+  }
+
+  return order;
+}
+
+function downloadPdfBytes(bytes: Uint8Array, fileName: string) {
+  const arrayBuffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(arrayBuffer).set(bytes);
+  const blob = new Blob([arrayBuffer], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+function buildMergedPdfFileName(pdfOneName: string, pdfTwoName: string) {
+  const first = cleanPdfFileNameStem(pdfOneName) || "pdf-1";
+  const second = cleanPdfFileNameStem(pdfTwoName) || "pdf-2";
+  return `${first}-${second}-merged.pdf`;
+}
+
+function cleanPdfFileNameStem(value: string) {
+  return value
+    .replace(/\.pdf$/i, "")
+    .trim()
+    .replace(/[^a-z0-9]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase();
 }
 
 function formatFileSize(size: number) {
@@ -3421,6 +4127,31 @@ function TemplatePreview({ mode, accent }: { mode: ModeValue; accent: string }) 
         <div className="absolute left-1/2 top-1/2 aspect-[4/3] h-[62%] -translate-x-1/2 -translate-y-1/2 rounded-xl border-4 border-white bg-[linear-gradient(140deg,#fafafa_0%,#dbeafe_45%,#fef3c7_100%)] shadow-[0_20px_45px_rgba(15,23,42,0.22)]" />
         <div className="absolute left-[28%] top-[31%] h-5 w-24 rounded-md bg-zinc-900/20" />
         <div className="absolute bottom-[28%] right-[29%] h-12 w-16 rounded-md bg-emerald-500/55" />
+      </div>
+    );
+  }
+
+  if (mode === "uploaded-pdfs") {
+    return (
+      <div
+        aria-hidden="true"
+        className="relative aspect-[1332/661] overflow-hidden rounded-t-2xl bg-[linear-gradient(135deg,#155e75_0%,#f4f4f5_48%,#fef3c7_100%)]"
+      >
+        <div className="absolute inset-0 bg-[linear-gradient(105deg,rgba(14,116,144,0.32),transparent_48%),linear-gradient(28deg,rgba(245,158,11,0.24),transparent_43%)]" />
+        <div className="absolute left-[19%] top-[16%] h-[68%] w-[28%] rotate-[-4deg] rounded-lg border-4 border-white bg-white shadow-[0_18px_38px_rgba(15,23,42,0.22)]">
+          <div className="mx-5 mt-7 h-3 rounded bg-zinc-800/25" />
+          <div className="mx-5 mt-3 h-2 rounded bg-zinc-800/15" />
+          <div className="mx-5 mt-2 h-2 rounded bg-zinc-800/15" />
+          <div className="mx-5 mt-5 h-16 rounded bg-cyan-700/20" />
+        </div>
+        <div className="absolute right-[20%] top-[18%] h-[66%] w-[28%] rotate-[3deg] rounded-lg border-4 border-white bg-white shadow-[0_18px_38px_rgba(15,23,42,0.22)]">
+          <div className="mx-5 mt-7 h-16 rounded bg-amber-500/25" />
+          <div className="mx-5 mt-5 h-2 rounded bg-zinc-800/15" />
+          <div className="mx-5 mt-2 h-2 rounded bg-zinc-800/15" />
+          <div className="absolute bottom-5 right-5 rounded bg-red-700 px-2 py-1 text-[10px] font-black text-white">
+            PDF
+          </div>
+        </div>
       </div>
     );
   }

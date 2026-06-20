@@ -10,7 +10,9 @@ export default function NichesPage() {
             <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
               Niches
             </p>
-            <p className="text-sm text-zinc-500">Book links, author links, and niche ideas saved to disk.</p>
+            <p className="text-sm text-zinc-500">
+              Book links, author links, Amazon search pages, and niche ideas saved to disk.
+            </p>
           </div>
           <div className="flex w-full flex-wrap justify-end gap-2">
             <Link

@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import { randomUUID } from "crypto";
 import path from "path";
 
-export const NICHE_SECTIONS = ["books", "authors", "ideas"] as const;
+export const NICHE_SECTIONS = ["books", "authors", "searches", "ideas"] as const;
 export type NicheSection = (typeof NICHE_SECTIONS)[number];
 
 export interface NichePreview {

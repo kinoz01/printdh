@@ -5,6 +5,7 @@ const pageTitle = document.querySelector("#page-title");
 const statusLine = document.querySelector("#status");
 const saveBookButton = document.querySelector("#save-book");
 const saveAuthorButton = document.querySelector("#save-author");
+const saveSearchButton = document.querySelector("#save-search");
 const DEFAULT_APP_URL = "http://localhost:3000";
 
 let activeTab = null;
@@ -26,7 +27,9 @@ async function init() {
 
   pageTitle.textContent = activeTab.title || activeTab.url;
   const detectedSection = detectSection(activeTab.url);
-  if (detectedSection === "authors") {
+  if (detectedSection === "searches") {
+    saveSearchButton.focus();
+  } else if (detectedSection === "authors") {
     saveAuthorButton.focus();
   } else {
     saveBookButton.focus();
@@ -41,6 +44,7 @@ appUrlInput.addEventListener("change", () => {
 
 saveBookButton.addEventListener("click", () => saveCurrentTab("books"));
 saveAuthorButton.addEventListener("click", () => saveCurrentTab("authors"));
+saveSearchButton.addEventListener("click", () => saveCurrentTab("searches"));
 
 async function saveCurrentTab(section) {
   if (!activeTab?.url) {
@@ -71,10 +75,11 @@ async function saveCurrentTab(section) {
     if (!response.ok) {
       throw new Error(payload.error || `Save failed with status ${response.status}`);
     }
+    const label = sectionStatusLabel(section);
     if (payload.duplicate) {
-      setStatus(section === "books" ? "Book already saved." : "Author already saved.", "ok");
+      setStatus(`${label} already saved.`, "ok");
     } else {
-      setStatus(section === "books" ? "Book saved." : "Author saved.", "ok");
+      setStatus(`${label} saved.`, "ok");
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Save failed.";
@@ -167,12 +172,14 @@ function executeScript(details) {
 function collectAmazonPageData() {
   const text = (selector) => document.querySelector(selector)?.textContent?.replace(/\s+/g, " ").trim() || "";
   const attr = (selector, attribute) => document.querySelector(selector)?.getAttribute(attribute) || "";
+  const fieldValue = (selector) => document.querySelector(selector)?.value?.replace(/\s+/g, " ").trim() || "";
   const wrapperCoverImage = document.querySelector("#imgTagWrapperId img");
   const coverImage =
     wrapperCoverImage ||
     document.querySelector("#landingImage, #imgBlkFront, #ebooksImgBlkFront, img[data-a-dynamic-image]");
   const title =
     text("#productTitle") ||
+    searchPageTitle() ||
     text("h1[data-testid='title']") ||
     document.querySelector("meta[property='og:title']")?.getAttribute("content") ||
     document.title ||
@@ -202,6 +209,15 @@ function collectAmazonPageData() {
     coverImageUrl,
     title: title.replace(/\s*:\s*Amazon\.[^:]+$/i, "").trim(),
   };
+
+  function searchPageTitle() {
+    const query =
+      fieldValue("#twotabsearchtextbox") ||
+      new URLSearchParams(window.location.search).get("k") ||
+      new URLSearchParams(window.location.search).get("field-keywords") ||
+      "";
+    return query.trim() ? `Amazon search: ${query.trim()}` : "";
+  }
 
   function bestImageFromElement(image) {
     if (!image) {
@@ -272,10 +288,32 @@ function collectAmazonPageData() {
 }
 
 function detectSection(url) {
+  if (isAmazonSearchUrl(url)) {
+    return "searches";
+  }
   if (/\/(author|stores\/author)\//i.test(url)) {
     return "authors";
   }
   return "books";
+}
+
+function isAmazonSearchUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return /(^|\.)amazon\./i.test(parsed.hostname) && parsed.pathname.replace(/\/+$/, "") === "/s";
+  } catch {
+    return false;
+  }
+}
+
+function sectionStatusLabel(section) {
+  if (section === "authors") {
+    return "Author";
+  }
+  if (section === "searches") {
+    return "Search page";
+  }
+  return "Book";
 }
 
 function normalizeAppUrl(value) {
@@ -332,6 +370,7 @@ function callExtensionApi(method, context, args) {
 function setBusy(isBusy) {
   saveBookButton.disabled = isBusy;
   saveAuthorButton.disabled = isBusy;
+  saveSearchButton.disabled = isBusy;
 }
 
 function setStatus(message, state) {

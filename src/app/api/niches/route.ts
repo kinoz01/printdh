@@ -12,7 +12,7 @@ import {
 } from "@/lib/niches-store";
 
 const PAGE_SIZE = 50;
-const LINK_SECTIONS = new Set<NicheSection>(["books", "authors"]);
+const LINK_SECTIONS = new Set<NicheSection>(["books", "authors", "searches"]);
 const COVER_MAX_BYTES = 5_000_000;
 const COVER_DATA_MAX_CHARS = 7_000_000;
 const CORS_HEADERS = {
@@ -184,7 +184,7 @@ async function buildLinkPreview(
     section: NicheSection;
   }
 ): Promise<NichePreview> {
-  const fallback = () => fallbackPreview(url, options.pageTitle, options.authorName);
+  const fallback = () => fallbackPreview(url, options.pageTitle, options.authorName, options.section);
 
   try {
     const response = await fetch(url, {
@@ -220,6 +220,7 @@ async function buildLinkPreview(
       url,
       title:
         (options.section === "authors" ? authorName : "") ||
+        (options.section === "searches" ? searchPreviewTitle(url, options.pageTitle) : "") ||
         readMeta(html, "og:title") ||
         readTitle(html) ||
         cleanPageTitle(options.pageTitle) ||
@@ -243,10 +244,10 @@ async function buildLinkPreview(
   }
 }
 
-function fallbackPreview(url: string, pageTitle = "", authorName = ""): NichePreview {
+function fallbackPreview(url: string, pageTitle = "", authorName = "", section?: NicheSection): NichePreview {
   return {
     url,
-    title: authorName || cleanPageTitle(pageTitle) || fallbackTitle(url),
+    title: authorName || (section === "searches" ? searchPreviewTitle(url, pageTitle) : "") || cleanPageTitle(pageTitle) || fallbackTitle(url),
     siteName: new URL(url).hostname.replace(/^www\./, ""),
     authorName: authorName || undefined,
   };
@@ -330,6 +331,10 @@ function canonicalLinkKey(section: NicheSection, value: string) {
       return `amazon-author:${amazonAuthorId}`;
     }
 
+    if (section === "searches") {
+      return canonicalSearchLinkKey(url);
+    }
+
     url.hash = "";
     url.search = "";
     url.pathname = url.pathname.replace(/\/+$/, "") || "/";
@@ -354,6 +359,61 @@ function readAmazonAuthorId(url: URL) {
     path.match(/\/stores\/[^/]+\/author\/([A-Z0-9_-]+)/i) ??
     path.match(/\/(?:stores\/author|author|e)\/([A-Z0-9_-]+)/i);
   return (match?.[1] || "").toUpperCase();
+}
+
+function canonicalSearchLinkKey(url: URL) {
+  url.hash = "";
+  url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+  const host = url.hostname.replace(/^(www|smile|m)\./, "").toLowerCase();
+  const ignoredParams = new Set([
+    "ascsubtag",
+    "crid",
+    "dib",
+    "dib_tag",
+    "linkcode",
+    "qid",
+    "ref",
+    "ref_",
+    "sprefix",
+    "tag",
+  ]);
+  const params = Array.from(url.searchParams.entries())
+    .filter(([key]) => !ignoredParams.has(key.toLowerCase()) && !key.toLowerCase().startsWith("ref"))
+    .map(([key, value]) => [key.toLowerCase(), value.trim()] as const)
+    .filter(([, value]) => value)
+    .sort(([leftKey, leftValue], [rightKey, rightValue]) => {
+      const keyComparison = leftKey.localeCompare(rightKey);
+      return keyComparison || leftValue.localeCompare(rightValue);
+    });
+  const query = params.map(([key, value]) => `${key}=${value.toLowerCase()}`).join("&");
+  return `${url.protocol}//${host}${url.pathname.toLowerCase()}?${query}`;
+}
+
+function searchPreviewTitle(url: string, pageTitle = "") {
+  const cleanedTitle = cleanAmazonSearchTitle(pageTitle);
+  if (cleanedTitle) {
+    return cleanedTitle;
+  }
+
+  try {
+    const parsed = new URL(url);
+    const query = parsed.searchParams.get("k") || parsed.searchParams.get("field-keywords") || "";
+    if (query.trim()) {
+      return `Amazon search: ${query.trim()}`;
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
+}
+
+function cleanAmazonSearchTitle(value: string) {
+  const cleaned = cleanPageTitle(value)
+    .replace(/^amazon\.[a-z.]+\s*:\s*/i, "")
+    .replace(/^amazon\s+search\s*[:|-]\s*/i, "")
+    .trim();
+  return cleaned ? `Amazon search: ${cleaned}` : "";
 }
 
 function normalizeDuplicateText(value: string) {

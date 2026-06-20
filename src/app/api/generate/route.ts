@@ -3,6 +3,7 @@ import { z } from "zod";
 import { loadImageAssets, type ProvidedBookImage } from "@/lib/book/assets";
 import { generateBook } from "@/lib/book/generator";
 import { NUMBER_BADGE_COLOR_VALUES } from "@/lib/book/number-badge-colors";
+import type { PdfAsset } from "@/lib/book/types";
 
 const schema = z.object({
   mode: z.enum([
@@ -17,6 +18,7 @@ const schema = z.object({
     "even-full-page-text",
     "image-only",
     "uploaded-images",
+    "uploaded-pdfs",
     "full-fact",
     "dictionary",
   ]),
@@ -62,7 +64,7 @@ class RequestParseError extends Error {}
 
 export async function POST(request: NextRequest) {
   try {
-    const { payload, uploadedImages, uploadedBackgroundImages } = await parseGenerateRequest(request);
+    const { payload, uploadedImages, uploadedBackgroundImages, uploadedPdfs } = await parseGenerateRequest(request);
     const normalizedPayload = {
       ...payload,
       fullFactUploadedFontBytes: payload.fullFactUploadedFont
@@ -72,6 +74,7 @@ export async function POST(request: NextRequest) {
         ? new Uint8Array(Buffer.from(payload.fullFactTitleUploadedFont.bytesBase64, "base64"))
         : undefined,
       imageAssets: uploadedImages.length ? await loadImageAssets(payload.imageLibrary ?? "", uploadedImages) : undefined,
+      pdfAssets: uploadedPdfs.length ? uploadedPdfs : undefined,
       backgroundImageAssets: uploadedBackgroundImages.length
         ? await loadImageAssets(payload.imageLibrary ?? "", uploadedBackgroundImages)
         : undefined,
@@ -102,6 +105,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
   payload: z.infer<typeof schema>;
   uploadedImages: ProvidedBookImage[];
   uploadedBackgroundImages: ProvidedBookImage[];
+  uploadedPdfs: PdfAsset[];
 }> {
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {
@@ -110,6 +114,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
       payload: schema.parse(body),
       uploadedImages: [],
       uploadedBackgroundImages: [],
+      uploadedPdfs: [],
     };
   }
 
@@ -130,6 +135,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
     payload: schema.parse(parsedPayload),
     uploadedImages: await readProvidedImages(formData, "images"),
     uploadedBackgroundImages: await readProvidedImages(formData, "backgroundImages"),
+    uploadedPdfs: await readProvidedPdfs(formData, "pdfs"),
   };
 }
 
@@ -141,6 +147,18 @@ async function readProvidedImages(formData: FormData, fieldName: string): Promis
       .map(async (file) => ({
         name: file.name || "image",
         contentType: file.type || undefined,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+      }))
+  );
+}
+
+async function readProvidedPdfs(formData: FormData, fieldName: string): Promise<PdfAsset[]> {
+  return Promise.all(
+    formData
+      .getAll(fieldName)
+      .filter((value): value is File => value instanceof File && value.size > 0)
+      .map(async (file) => ({
+        name: file.name || "document.pdf",
         bytes: new Uint8Array(await file.arrayBuffer()),
       }))
   );

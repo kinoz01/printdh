@@ -59,6 +59,14 @@ const SECTION_CONFIGS: SectionConfig[] = [
     multiline: false,
   },
   {
+    section: "searches",
+    title: "Amazon Search Pages",
+    description: "Saved Amazon search results pages for niche research and follow-up.",
+    inputLabel: "Amazon search results link",
+    placeholder: "https://www.amazon.com/s?k=...",
+    multiline: false,
+  },
+  {
     section: "ideas",
     title: "Niches + Ideas",
     description: "Raw notes, niche angles, title seeds, and research ideas.",
@@ -88,6 +96,7 @@ function createInitialState(): Record<NicheSection, SectionState> {
   return {
     books: { ...EMPTY_SECTION_STATE },
     authors: { ...EMPTY_SECTION_STATE },
+    searches: { ...EMPTY_SECTION_STATE },
     ideas: { ...EMPTY_SECTION_STATE },
   };
 }

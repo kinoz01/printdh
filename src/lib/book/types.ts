@@ -95,6 +95,11 @@ export interface ImageAsset {
   mimeType: PdfImageMimeType;
 }
 
+export interface PdfAsset {
+  bytes: Uint8Array;
+  name: string;
+}
+
 export interface TemplateAsset {
   id: string;
   type: "image" | "pdf";
