@@ -1699,6 +1699,20 @@ export function GeneratorApp(props: GeneratorAppProps) {
     [readMergePdfInput]
   );
 
+  const handleMergePdfOneDrop = useCallback(
+    (files: FileList) => {
+      void readMergePdfInput("one", files[0] ?? null);
+    },
+    [readMergePdfInput]
+  );
+
+  const handleMergePdfTwoDrop = useCallback(
+    (files: FileList) => {
+      void readMergePdfInput("two", files[0] ?? null);
+    },
+    [readMergePdfInput]
+  );
+
   const removeUploadedBackgroundFile = useCallback((index: number) => {
     setUploadedBackgroundFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
   }, []);
@@ -2255,6 +2269,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
               notice={mergePdfNotice}
               onPdfOneSelected={handleMergePdfOneFile}
               onPdfTwoSelected={handleMergePdfTwoFile}
+              onPdfOneDropped={handleMergePdfOneDrop}
+              onPdfTwoDropped={handleMergePdfTwoDrop}
               onClearPdfOne={() => {
                 setMergePdfOne(EMPTY_MERGE_PDF_INPUT);
                 setMergePdfError(null);
@@ -3557,6 +3573,8 @@ function PdfPairMergeTool({
   notice,
   onPdfOneSelected,
   onPdfTwoSelected,
+  onPdfOneDropped,
+  onPdfTwoDropped,
   onClearPdfOne,
   onClearPdfTwo,
   onMerge,
@@ -3568,6 +3586,8 @@ function PdfPairMergeTool({
   notice: string | null;
   onPdfOneSelected: (event: ChangeEvent<HTMLInputElement>) => void;
   onPdfTwoSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onPdfOneDropped: (files: FileList) => void;
+  onPdfTwoDropped: (files: FileList) => void;
   onClearPdfOne: () => void;
   onClearPdfTwo: () => void;
   onMerge: () => void;
@@ -3590,6 +3610,7 @@ function PdfPairMergeTool({
           label="PDF 1"
           state={pdfOne}
           onFileSelected={onPdfOneSelected}
+          onFilesDropped={onPdfOneDropped}
           onClear={onClearPdfOne}
         />
         <MergePdfPickerCard
@@ -3597,6 +3618,7 @@ function PdfPairMergeTool({
           label="PDF 2"
           state={pdfTwo}
           onFileSelected={onPdfTwoSelected}
+          onFilesDropped={onPdfTwoDropped}
           onClear={onClearPdfTwo}
         />
       </div>
@@ -3623,14 +3645,44 @@ function MergePdfPickerCard({
   label,
   state,
   onFileSelected,
+  onFilesDropped,
   onClear,
 }: {
   inputId: string;
   label: string;
   state: MergePdfInputState;
   onFileSelected: (event: ChangeEvent<HTMLInputElement>) => void;
+  onFilesDropped: (files: FileList) => void;
   onClear: () => void;
 }) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragEnter = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }, []);
+
+  const handleDragLeave = useCallback((event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+      setIsDragging(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: DragEvent<HTMLLabelElement>) => {
+      event.preventDefault();
+      setIsDragging(false);
+      onFilesDropped(event.dataTransfer.files);
+    },
+    [onFilesDropped]
+  );
+
   return (
     <div className="grid min-w-0 gap-3 rounded-xl border border-zinc-200 bg-white p-3">
       <div className="flex items-start justify-between gap-3">
@@ -3656,9 +3708,15 @@ function MergePdfPickerCard({
       </div>
       <label
         htmlFor={inputId}
-        className="flex min-h-20 cursor-pointer items-center justify-center rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 py-4 text-center text-sm font-semibold text-zinc-800 transition hover:border-zinc-500"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={`flex min-h-20 cursor-pointer items-center justify-center rounded-lg border border-dashed px-3 py-4 text-center text-sm font-semibold transition ${
+          isDragging ? "border-black bg-zinc-100 text-zinc-950" : "border-zinc-300 bg-zinc-50 text-zinc-800 hover:border-zinc-500"
+        }`}
       >
-        Choose PDF
+        Choose or drop PDF
       </label>
       <input id={inputId} type="file" accept={UPLOAD_PDF_ACCEPT} onChange={onFileSelected} className="hidden" />
       {state.pageCount ? (
