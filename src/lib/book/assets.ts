@@ -14,12 +14,16 @@ export interface ProvidedBookImage {
   contentType?: string;
 }
 
-export async function loadImageAssets(folder: string, providedImages?: ProvidedBookImage[]): Promise<ImageAsset[]> {
-  const files = providedImages && providedImages.length > 0 ? providedImages : await loadStoredBookImages(folder);
+export async function loadImageAssets(
+  folder: string,
+  providedImages?: ProvidedBookImage[],
+  maxImages?: number
+): Promise<ImageAsset[]> {
+  const files = providedImages && providedImages.length > 0 ? providedImages : await loadStoredBookImages(folder, maxImages);
   return buildImageAssets(files);
 }
 
-async function loadStoredBookImages(folder: string): Promise<ProvidedBookImage[]> {
+async function loadStoredBookImages(folder: string, maxImages?: number): Promise<ProvidedBookImage[]> {
   const absolute = path.resolve(process.cwd(), folder);
   let entries: string[] = [];
   try {
@@ -39,8 +43,9 @@ async function loadStoredBookImages(folder: string): Promise<ProvidedBookImage[]
       (value) => naturalKey(path.basename(value).toLowerCase()),
     ]
   );
+  const limit = maxImages && Number.isFinite(maxImages) ? Math.max(1, Math.floor(maxImages)) : files.length;
   const storedImages: ProvidedBookImage[] = [];
-  for (const file of files) {
+  for (const file of files.slice(0, limit)) {
     try {
       storedImages.push({
         name: path.basename(file),
@@ -60,18 +65,19 @@ async function buildImageAssets(files: ProvidedBookImage[]): Promise<ImageAsset[
     try {
       const bytes = file.bytes;
       const dimensions = imageSize(bytes);
-      if (!dimensions.width || !dimensions.height) {
-        continue;
-      }
       const sourceMimeType =
         determineMimeType(dimensions.type) ??
         determineMimeType(file.contentType) ??
         determineMimeType(path.extname(file.name).toLowerCase());
       const normalized = await normalizePdfCompatibleImage(bytes, sourceMimeType);
+      const normalizedDimensions = imageSize(normalized.bytes);
+      if (!normalizedDimensions.width || !normalizedDimensions.height) {
+        continue;
+      }
       assets.push({
         bytes: normalized.bytes,
-        width: dimensions.width,
-        height: dimensions.height,
+        width: normalizedDimensions.width,
+        height: normalizedDimensions.height,
         mimeType: normalized.mimeType,
       });
     } catch (error) {
@@ -188,32 +194,26 @@ function determineMimeType(identifier?: string | null): string | null {
 }
 
 async function normalizePdfCompatibleImage(bytes: Uint8Array, mimeType: string | null): Promise<NormalizedPdfImage> {
+  const image = sharp(bytes, { animated: false, limitInputPixels: 268_402_689 }).rotate();
+  const metadata = await image.metadata();
+
   if (mimeType === "image/png") {
     return {
-      bytes,
+      bytes: await image.png().toBuffer(),
       mimeType: "image/png",
     };
   }
 
-  if (mimeType === "image/jpeg") {
+  if (mimeType === "image/jpeg" || !metadata.hasAlpha) {
     return {
-      bytes,
+      bytes: await image.jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
       mimeType: "image/jpeg",
     };
   }
 
-  const metadata = await sharp(bytes).metadata();
-
-  if (metadata.hasAlpha) {
-    return {
-      bytes: await sharp(bytes).png().toBuffer(),
-      mimeType: "image/png",
-    };
-  }
-
   return {
-    bytes: await sharp(bytes).jpeg({ quality: 92, mozjpeg: true }).toBuffer(),
-    mimeType: "image/jpeg",
+    bytes: await image.png().toBuffer(),
+    mimeType: "image/png",
   };
 }
 

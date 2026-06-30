@@ -99,7 +99,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     return pending;
   };
 
-  const imageAssets = providedImageAssets ?? (await loadImageAssets(imageLibrary));
+  const imageAssets = providedImageAssets ?? (await loadImageAssets(imageLibrary, undefined, totalPages));
   const embeddedImages: PDFImage[] = [];
   for (const asset of imageAssets) {
     const image = asset.mimeType === "image/png" ? await pdf.embedPng(asset.bytes) : await pdf.embedJpg(asset.bytes);

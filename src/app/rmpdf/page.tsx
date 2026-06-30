@@ -1,19 +1,12 @@
 import Link from "next/link";
-import { NichesBoard } from "@/components/NichesBoard";
+import { PdfMetadataRemover } from "@/components/PdfMetadataRemover";
 
-export default function NichesPage() {
+export default function RmPdfPage() {
   return (
     <main className="min-h-screen bg-zinc-50 py-12">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4">
         <header className="flex flex-col items-center gap-4 text-center">
-          <div className="space-y-1">
-            <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
-              Niches
-            </p>
-            <p className="text-sm text-zinc-500">
-              Book links, author links, Amazon search pages, and niche ideas saved to disk.
-            </p>
-          </div>
+          <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">rmpdf</p>
           <div className="flex w-full flex-wrap justify-end gap-2">
             <Link
               href="/"
@@ -34,14 +27,14 @@ export default function NichesPage() {
               Compressor
             </Link>
             <Link
-              href="/rmpdf"
+              href="/niches"
               className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
             >
-              rmpdf
+              Niches
             </Link>
           </div>
         </header>
-        <NichesBoard />
+        <PdfMetadataRemover />
       </div>
     </main>
   );

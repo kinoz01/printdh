@@ -46,6 +46,12 @@ export default async function HomePage() {
                 Compressor
               </Link>
               <Link
+                href="/rmpdf"
+                className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+              >
+                rmpdf
+              </Link>
+              <Link
                 href="/niches"
                 className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
               >
