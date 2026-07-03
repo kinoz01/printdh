@@ -6,6 +6,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 type QualityPreset = "prepress" | "printer" | "ebook" | "screen";
 
+const MAX_UPLOAD_SIZE_MB = 500;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+
 function execFileAsync(command: string, args: string[]) {
   return new Promise<void>((resolve, reject) => {
     execFile(command, args, (error) => {
@@ -63,8 +66,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing PDF upload (field name: file)" }, { status: 400 });
     }
 
-    if (file.size > 200 * 1024 * 1024) {
-      return NextResponse.json({ error: "PDF is too large (max 200MB)" }, { status: 413 });
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return NextResponse.json({ error: `PDF is too large (max ${MAX_UPLOAD_SIZE_MB}MB)` }, { status: 413 });
     }
 
     const filename = typeof file.name === "string" ? file.name : "upload.pdf";
@@ -115,4 +118,3 @@ export async function POST(request: NextRequest) {
     }
   }
 }
-
