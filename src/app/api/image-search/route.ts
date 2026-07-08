@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { MAX_KEYWORDS } from "@/lib/image-search/constants";
 
-const PROVIDERS = ["scraping-win", "google", "pixabay", "pexels", "brave"] as const;
+const PROVIDERS = ["scraping-win", "google", "pixabay", "pexels"] as const;
 type Provider = (typeof PROVIDERS)[number];
 
 const requestSchema = z.object({
@@ -25,7 +25,6 @@ const requestSchema = z.object({
       googleCx: z.string().optional(),
       pixabayKey: z.string().optional(),
       pexelsKey: z.string().optional(),
-      braveKey: z.string().optional(),
     })
     .optional(),
 });
@@ -46,7 +45,6 @@ type ProviderKeys = {
   googleCx?: string;
   pixabayKey?: string;
   pexelsKey?: string;
-  braveKey?: string;
 };
 
 interface SearchOptions {
@@ -75,13 +73,17 @@ interface GroupedImageResult extends RemoteImageResult {
   keyword: string;
 }
 
-interface ScrapingWinResult {
-  url?: string;
-  thumb?: string;
+interface DdgImageResult {
+  title?: string;
   image?: string;
+  url?: string;
   width?: number;
   height?: number;
-  title?: string;
+}
+
+interface DdgImagePayload {
+  results?: DdgImageResult[];
+  next?: string;
 }
 
 interface PixabayHit {
@@ -108,20 +110,6 @@ interface PexelsPhoto {
   };
 }
 
-interface BraveResult {
-  id?: string;
-  thumbnail?: { src?: string } | string;
-  url?: string;
-  original?: string;
-  properties?: { original_width?: number; original_height?: number; image_size?: number; content_length?: number };
-  width?: number;
-  height?: number;
-  source?: string;
-  title?: string;
-  page_title?: string;
-}
-
-const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const DEFAULT_LIMIT = 18;
 const FILTER_FETCH_MULTIPLIER = 3;
 const SCRAPING_WIN_MAX_RESULTS = 35;
@@ -136,9 +124,7 @@ export async function GET() {
       google: Boolean(defaults.googleApiKey && defaults.googleCx),
       pixabay: Boolean(defaults.pixabayKey),
       pexels: Boolean(defaults.pexelsKey),
-      brave: Boolean(defaults.braveKey),
     },
-    defaults,
   });
 }
 
@@ -176,7 +162,6 @@ function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptio
     googleCx: payload.keys?.googleCx || envDefaults.googleCx,
     pixabayKey: payload.keys?.pixabayKey || envDefaults.pixabayKey,
     pexelsKey: payload.keys?.pexelsKey || envDefaults.pexelsKey,
-    braveKey: payload.keys?.braveKey || envDefaults.braveKey,
   };
   const uniqueProviders = Array.from(new Set(payload.providers)) as Provider[];
   const activeProviders = uniqueProviders.filter((provider) => isProviderConfigured(provider, keys));
@@ -288,8 +273,6 @@ function isProviderConfigured(provider: Provider, keys: ProviderKeys) {
       return Boolean(keys.pixabayKey);
     case "pexels":
       return Boolean(keys.pexelsKey);
-    case "brave":
-      return Boolean(keys.braveKey);
     default:
       return false;
   }
@@ -312,11 +295,6 @@ function buildProviderPromise(provider: Provider, keyword: string, limit: number
     case "pexels":
       if (keys.pexelsKey) {
         return searchPexels(keyword, limit, keys.pexelsKey);
-      }
-      return null;
-    case "brave":
-      if (keys.braveKey) {
-        return searchBrave(keyword, limit, keys.braveKey);
       }
       return null;
     default:
@@ -430,60 +408,143 @@ async function runLimitedConcurrency<T>(items: T[], concurrency: number, worker:
   await Promise.all(runners);
 }
 
-async function searchScrapingWin(query: string, limit: number): Promise<RemoteImageResult[]> {
-  // scraping.win starts returning 502 once max_results exceeds 35.
-  const cappedLimit = Math.min(Math.max(limit, 1), SCRAPING_WIN_MAX_RESULTS);
-  const response = await fetch("https://api.scraping.win/search", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${SCRAPING_TOKEN}`,
-    },
-    body: JSON.stringify({ keywords: query, max_results: cappedLimit }),
+const DDG_BASE = "https://duckduckgo.com";
+const DDG_HEADERS = {
+  "User-Agent":
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  "Accept-Language": "en-US,en;q=0.9",
+};
+const DDG_VQD_RE = /vqd=(?:"|')?([\d-]+)/;
+
+async function withRetries<T>(task: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await task();
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts - 1) {
+        const backoffMs = 150 * (attempt + 1) + Math.floor(Math.random() * 150);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function fetchDdgVqdToken(query: string): Promise<string> {
+  const response = await fetch(`${DDG_BASE}/?q=${encodeURIComponent(query)}`, {
+    headers: DDG_HEADERS,
     cache: "no-store",
   });
   if (!response.ok) {
-    const detail = await readResponseError(response, "Image search failed");
-    throw new Error(`HTTP ${response.status}: ${detail}`);
+    throw new Error(`DuckDuckGo token request failed with status ${response.status}`);
   }
-  const payload = await response.json();
-  const results = Array.isArray(payload.results) ? payload.results : [];
-  return results.slice(0, cappedLimit).flatMap((item: ScrapingWinResult, index: number) => {
-    const bestImage = item.image || item.thumb;
-    if (!bestImage) {
-      return [];
+  const html = await response.text();
+  const match = DDG_VQD_RE.exec(html);
+  if (!match) {
+    throw new Error("Unable to obtain DuckDuckGo search token");
+  }
+  return match[1];
+}
+
+function parseDdgNextOffset(next: string | undefined): number | null {
+  if (!next) {
+    return null;
+  }
+  const queryIndex = next.indexOf("?");
+  if (queryIndex === -1) {
+    return null;
+  }
+  const params = new URLSearchParams(next.slice(queryIndex + 1));
+  const raw = params.get("s");
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function fetchDdgBatch(
+  query: string,
+  vqd: string,
+  offset: number,
+): Promise<{ results: DdgImageResult[]; nextOffset: number | null }> {
+  const params = new URLSearchParams({
+    l: "us-en",
+    o: "json",
+    q: query,
+    vqd,
+    f: "size:Large",
+    p: "-1",
+  });
+  if (offset > 0) {
+    params.set("s", String(offset));
+  }
+  const response = await fetch(`${DDG_BASE}/i.js?${params.toString()}`, {
+    headers: { ...DDG_HEADERS, Referer: `${DDG_BASE}/` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw new Error(`DuckDuckGo image search failed with status ${response.status}`);
+  }
+  let payload: DdgImagePayload;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("DuckDuckGo returned an unexpected response");
+  }
+  return { results: payload.results ?? [], nextOffset: parseDdgNextOffset(payload.next) };
+}
+
+async function searchScrapingWin(query: string, limit: number): Promise<RemoteImageResult[]> {
+  const cappedLimit = Math.min(Math.max(limit, 1), SCRAPING_WIN_MAX_RESULTS);
+  const results: RemoteImageResult[] = [];
+  const seen = new Set<string>();
+
+  let vqd = await withRetries(() => fetchDdgVqdToken(query));
+  let offset = 0;
+
+  while (results.length < cappedLimit) {
+    const currentOffset = offset;
+    const batch = await withRetries(async () => {
+      try {
+        return await fetchDdgBatch(query, vqd, currentOffset);
+      } catch (error) {
+        vqd = await fetchDdgVqdToken(query);
+        throw error;
+      }
+    });
+
+    if (!batch.results.length) {
+      break;
     }
-    return [
-      {
-        id: `scraping-${item.url ?? index}`,
+
+    for (const item of batch.results) {
+      const bestImage = item.image;
+      if (!bestImage || seen.has(bestImage)) {
+        continue;
+      }
+      seen.add(bestImage);
+      results.push({
+        id: `scraping-${item.url ?? bestImage}`,
         previewUrl: bestImage,
         fullsizeUrl: bestImage,
         width: item.width,
         height: item.height,
-        source: "scraping.win",
+        source: "duckduckgo",
         title: item.title,
-      },
-    ];
-  });
-}
-
-async function readResponseError(response: Response, fallback: string) {
-  const contentType = response.headers.get("content-type") ?? "";
-  try {
-    if (contentType.includes("application/json")) {
-      const payload = await response.json();
-      if (typeof payload?.error === "string" && payload.error.trim()) {
-        return payload.error.trim();
-      }
-      if (typeof payload?.message === "string" && payload.message.trim()) {
-        return payload.message.trim();
+      });
+      if (results.length >= cappedLimit) {
+        break;
       }
     }
-    const text = await response.text();
-    return text.trim() ? text.trim().slice(0, 200) : fallback;
-  } catch {
-    return fallback;
+
+    if (batch.nextOffset === null) {
+      break;
+    }
+    offset = batch.nextOffset;
   }
+
+  return results;
 }
 
 async function searchGoogleImages(query: string, limit: number, apiKey: string, cx: string): Promise<RemoteImageResult[]> {
@@ -596,57 +657,12 @@ async function searchPexels(query: string, limit: number, apiKey: string): Promi
   });
 }
 
-async function searchBrave(query: string, limit: number, apiKey: string): Promise<RemoteImageResult[]> {
-  const url = new URL("https://api.search.brave.com/res/v1/images/search");
-  url.searchParams.set("q", query);
-  url.searchParams.set("count", Math.min(limit, 20).toString());
-  const response = await fetch(url, {
-    cache: "no-store",
-    headers: {
-      "X-Subscription-Token": apiKey,
-    },
-  });
-  if (!response.ok) {
-    throw new Error("Brave search failed");
-  }
-  const payload = await response.json();
-  const results = Array.isArray(payload.results)
-    ? payload.results
-    : Array.isArray(payload.items)
-    ? payload.items
-    : Array.isArray(payload.data)
-    ? payload.data
-    : [];
-  return results.slice(0, limit).flatMap((item: BraveResult, index: number) => {
-    const thumb = typeof item.thumbnail === "string" ? item.thumbnail : item.thumbnail?.src;
-    const fullsizeUrl = item.original || item.url || thumb;
-    if (!fullsizeUrl) {
-      return [];
-    }
-    const previewUrl = fullsizeUrl || thumb;
-    const rawSize = Number(item.properties?.image_size ?? item.properties?.content_length);
-    return [
-      {
-        id: `brave-${item.id ?? index}`,
-        previewUrl,
-        fullsizeUrl,
-        width: item.properties?.original_width || item.width,
-        height: item.properties?.original_height || item.height,
-        fileSize: Number.isFinite(rawSize) ? rawSize : undefined,
-        source: item.source ?? "Brave",
-        title: item.title || item.page_title,
-      },
-    ];
-  });
-}
-
 function getServerProviderKeys(): ProviderKeys {
   return {
     googleApiKey: getSecretEnvValue("GOOGLE_CSE_KEY"),
     googleCx: getSecretEnvValue("GOOGLE_CSE_CX"),
     pixabayKey: getSecretEnvValue("PIXABAY_API_KEY"),
     pexelsKey: getSecretEnvValue("PEXELS_API_KEY"),
-    braveKey: getSecretEnvValue("BRAVE_API_KEY"),
   };
 }
 

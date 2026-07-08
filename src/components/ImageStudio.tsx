@@ -20,7 +20,7 @@ const PROVIDERS = [
   {
     value: "scraping-win",
     label: "api.scraping.win",
-    description: "Default free provider (token included).",
+    description: "Local DuckDuckGo scraper. No key required.",
     requiresKeys: false,
   },
   {
@@ -41,12 +41,6 @@ const PROVIDERS = [
     description: "Requires PEXELS_API_KEY.",
     requiresKeys: true,
   },
-  {
-    value: "brave",
-    label: "Brave Search",
-    description: "Requires BRAVE_API_KEY.",
-    requiresKeys: true,
-  },
 ] as const;
 
 type ProviderValue = (typeof PROVIDERS)[number]["value"];
@@ -56,7 +50,6 @@ const DEFAULT_KEYS = {
   googleCx: "",
   pixabayKey: "",
   pexelsKey: "",
-  braveKey: "",
 };
 
 type ApiKeys = typeof DEFAULT_KEYS;
@@ -158,7 +151,6 @@ interface DragState {
 
 type ResultsDialogAction = "clear-all" | "clear-fetched" | null;
 
-const SCRAPING_TOKEN = "DGir3Y/3jio3iwDOGjEjqQMv1OHC/DTasyq+FP1+mW0";
 const STORAGE_KEY = "image-provider-keys";
 const SEARCH_CACHE_KEY = "image-search-cache-v1";
 const MAX_RESULTS = 36;
@@ -279,15 +271,6 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
         const payload = await response.json();
         if (!cancelled) {
           setServerProviderSupport(payload.providers ?? null);
-          if (payload.defaults) {
-            setApiKeys((current) => ({
-              googleApiKey: current.googleApiKey || payload.defaults.googleApiKey || "",
-              googleCx: current.googleCx || payload.defaults.googleCx || "",
-              pixabayKey: current.pixabayKey || payload.defaults.pixabayKey || "",
-              pexelsKey: current.pexelsKey || payload.defaults.pexelsKey || "",
-              braveKey: current.braveKey || payload.defaults.braveKey || "",
-            }));
-          }
         }
       } catch {
         if (!cancelled) {
@@ -307,21 +290,18 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
       google: !apiKeys.googleApiKey || !apiKeys.googleCx,
       pixabay: !apiKeys.pixabayKey,
       pexels: !apiKeys.pexelsKey,
-      brave: !apiKeys.braveKey,
     };
     const serverSupport: Record<ProviderValue, boolean> = {
-      "scraping-win": true,
+      "scraping-win": Boolean(serverProviderSupport?.["scraping-win"]),
       google: Boolean(serverProviderSupport?.google),
       pixabay: Boolean(serverProviderSupport?.pixabay),
       pexels: Boolean(serverProviderSupport?.pexels),
-      brave: Boolean(serverProviderSupport?.brave),
     };
     const meta: Record<ProviderValue, { missingLocal: boolean; hasServer: boolean }> = {
-      "scraping-win": { missingLocal: false, hasServer: true },
+      "scraping-win": { missingLocal: missingKeys["scraping-win"], hasServer: serverSupport["scraping-win"] },
       google: { missingLocal: missingKeys.google, hasServer: serverSupport.google },
       pixabay: { missingLocal: missingKeys.pixabay, hasServer: serverSupport.pixabay },
       pexels: { missingLocal: missingKeys.pexels, hasServer: serverSupport.pexels },
-      brave: { missingLocal: missingKeys.brave, hasServer: serverSupport.brave },
     };
     return meta;
   }, [apiKeys, serverProviderSupport]);
@@ -927,26 +907,6 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
               placeholder="Pexels token"
             />
           </label>
-          <label className="space-y-1 text-sm text-zinc-600">
-            <span className="font-medium text-zinc-800">BRAVE_API_KEY</span>
-            <input
-              type="text"
-              value={apiKeys.braveKey}
-              onChange={(event) => setApiKeys((keys) => ({ ...keys, braveKey: event.target.value }))}
-              className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-black focus:outline-none"
-              placeholder="Brave subscription token"
-            />
-          </label>
-          <label className="space-y-1 text-sm text-zinc-600">
-            <span className="font-medium text-zinc-800">api.scraping.win token</span>
-            <input
-              type="text"
-              value={SCRAPING_TOKEN}
-              readOnly
-              className="w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm"
-            />
-            <span className="text-xs text-zinc-500">Always-on fallback provider.</span>
-          </label>
         </div>
       </section>
 
@@ -959,7 +919,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
           {PROVIDERS.map((provider) => {
             const isChecked = selectedProviders.has(provider.value);
             const support = providerMeta[provider.value];
-            const missingKeys = provider.requiresKeys && support.missingLocal && !support.hasServer;
+            const missingKeys = support.missingLocal && !support.hasServer;
             const disabled = provider.value === "scraping-win";
             return (
               <label
@@ -978,13 +938,12 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
                   />
                 </div>
                 <p className="text-xs text-zinc-600">{provider.description}</p>
-                {provider.requiresKeys && support.missingLocal && !support.hasServer && (
+                {support.missingLocal && !support.hasServer && (
                   <p className="text-xs font-medium text-amber-600">Add keys to enable</p>
                 )}
-                {provider.requiresKeys && support.missingLocal && support.hasServer && (
+                {support.missingLocal && support.hasServer && (
                   <p className="text-xs font-medium text-emerald-600">Server keys active</p>
                 )}
-                {provider.value === "scraping-win" && <p className="text-xs text-emerald-600">Always active</p>}
               </label>
             );
           })}

@@ -451,7 +451,7 @@ function NicheSectionPanel({
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-zinc-500">
-            Showing {state.entries.length} of {state.total}. Newest entries appear first.
+            Showing {state.entries.length} of {state.total}.
           </p>
           {state.hasMore ? (
             <button
