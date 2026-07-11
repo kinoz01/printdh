@@ -157,6 +157,7 @@ type BookFontFormat = "truetype" | "opentype";
 type DescribedPictureTextAlignment = "center" | "left";
 type UploadedPageNumberPosition = "alternating" | "center";
 type MergePdfSlot = "one" | "two";
+type MergePdfOrderMode = "first-two-from-first" | "page-by-page";
 
 interface MergePdfInputState {
   file: File | null;
@@ -173,6 +174,22 @@ const EMPTY_MERGE_PDF_INPUT: MergePdfInputState = {
   pageCount: null,
   error: null,
 };
+const MERGE_PDF_ORDER_OPTIONS: Array<{
+  value: MergePdfOrderMode;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "first-two-from-first",
+    label: "PDF 1 starts with 2 pages",
+    description: "PDF 1 page 1, PDF 1 page 2, PDF 2 page 1, then alternate.",
+  },
+  {
+    value: "page-by-page",
+    label: "Direct alternating",
+    description: "PDF 1 page 1, PDF 2 page 1, PDF 1 page 2, PDF 2 page 2.",
+  },
+];
 
 interface BookFontOption {
   id: string;
@@ -814,6 +831,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [uploadedPdfError, setUploadedPdfError] = useState<string | null>(null);
   const [mergePdfOne, setMergePdfOne] = useState<MergePdfInputState>(EMPTY_MERGE_PDF_INPUT);
   const [mergePdfTwo, setMergePdfTwo] = useState<MergePdfInputState>(EMPTY_MERGE_PDF_INPUT);
+  const [mergePdfOrderMode, setMergePdfOrderMode] = useState<MergePdfOrderMode>("first-two-from-first");
   const [isMergingPdfs, setIsMergingPdfs] = useState(false);
   const [mergePdfError, setMergePdfError] = useState<string | null>(null);
   const [mergePdfNotice, setMergePdfNotice] = useState<string | null>(null);
@@ -1928,7 +1946,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
 
     setIsMergingPdfs(true);
     try {
-      const mergedBytes = await mergePdfPairWithFirstTwoFromFirstPdf(mergePdfOne.file, mergePdfTwo.file);
+      const mergedBytes = await mergePdfPair(mergePdfOne.file, mergePdfTwo.file, mergePdfOrderMode);
       downloadPdfBytes(mergedBytes, buildMergedPdfFileName(mergePdfOne.file.name, mergePdfTwo.file.name));
       setMergePdfNotice("Merged PDF downloaded.");
     } catch (error) {
@@ -2264,6 +2282,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
             <PdfPairMergeTool
               pdfOne={mergePdfOne}
               pdfTwo={mergePdfTwo}
+              mergeOrderMode={mergePdfOrderMode}
               isMerging={isMergingPdfs}
               error={mergePdfError}
               notice={mergePdfNotice}
@@ -2281,6 +2300,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 setMergePdfError(null);
                 setMergePdfNotice(null);
               }}
+              onMergeOrderModeChange={setMergePdfOrderMode}
               onMerge={() => void handleMergePdfPair()}
             />
           ) : null}
@@ -3568,6 +3588,7 @@ function UploadedImagePicker({
 function PdfPairMergeTool({
   pdfOne,
   pdfTwo,
+  mergeOrderMode,
   isMerging,
   error,
   notice,
@@ -3577,10 +3598,12 @@ function PdfPairMergeTool({
   onPdfTwoDropped,
   onClearPdfOne,
   onClearPdfTwo,
+  onMergeOrderModeChange,
   onMerge,
 }: {
   pdfOne: MergePdfInputState;
   pdfTwo: MergePdfInputState;
+  mergeOrderMode: MergePdfOrderMode;
   isMerging: boolean;
   error: string | null;
   notice: string | null;
@@ -3590,19 +3613,41 @@ function PdfPairMergeTool({
   onPdfTwoDropped: (files: FileList) => void;
   onClearPdfOne: () => void;
   onClearPdfTwo: () => void;
+  onMergeOrderModeChange: (mode: MergePdfOrderMode) => void;
   onMerge: () => void;
 }) {
   const canMerge = Boolean(
     pdfOne.file && pdfTwo.file && pdfOne.pageCount && pdfTwo.pageCount && !pdfOne.error && !pdfTwo.error
   );
+  const selectedMergeOrder =
+    MERGE_PDF_ORDER_OPTIONS.find((option) => option.value === mergeOrderMode) ?? MERGE_PDF_ORDER_OPTIONS[0];
 
   return (
     <section className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
       <div className="space-y-1">
         <h4 className="text-sm font-semibold text-zinc-900">Merge two PDFs</h4>
-        <p className="text-xs text-zinc-600">
-          Output order: PDF 1 page 1, PDF 1 page 2, PDF 2 page 1, PDF 1 page 3, PDF 2 page 2, continuing alternately.
-        </p>
+        <p className="text-xs text-zinc-600">Output order: {selectedMergeOrder.description}</p>
+      </div>
+      <div className="grid gap-2 rounded-xl border border-zinc-200 bg-white p-2 sm:grid-cols-2">
+        {MERGE_PDF_ORDER_OPTIONS.map((option) => {
+          const isActive = option.value === mergeOrderMode;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => onMergeOrderModeChange(option.value)}
+              aria-pressed={isActive}
+              className={`rounded-lg border px-3 py-2 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-black ${
+                isActive ? "border-black bg-black text-white" : "border-zinc-200 bg-zinc-50 text-zinc-800 hover:border-zinc-500"
+              }`}
+            >
+              <span className="block text-sm font-semibold">{option.label}</span>
+              <span className={`block text-xs ${isActive ? "text-zinc-200" : "text-zinc-500"}`}>
+                {option.description}
+              </span>
+            </button>
+          );
+        })}
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <MergePdfPickerCard
@@ -3984,7 +4029,7 @@ async function countPdfPages(file: File) {
   return pageCount;
 }
 
-async function mergePdfPairWithFirstTwoFromFirstPdf(pdfOneFile: File, pdfTwoFile: File) {
+async function mergePdfPair(pdfOneFile: File, pdfTwoFile: File, orderMode: MergePdfOrderMode) {
   const { PDFDocument } = await import("pdf-lib");
   const [pdfOneBytes, pdfTwoBytes] = await Promise.all([pdfOneFile.arrayBuffer(), pdfTwoFile.arrayBuffer()]);
   const [pdfOne, pdfTwo] = await Promise.all([
@@ -4000,19 +4045,24 @@ async function mergePdfPairWithFirstTwoFromFirstPdf(pdfOneFile: File, pdfTwoFile
 
   const pdfOnePages = await mergedPdf.copyPages(pdfOne, Array.from({ length: pdfOnePageCount }, (_, index) => index));
   const pdfTwoPages = await mergedPdf.copyPages(pdfTwo, Array.from({ length: pdfTwoPageCount }, (_, index) => index));
-  for (const item of buildPdfPairMergeOrder(pdfOnePageCount, pdfTwoPageCount)) {
+  for (const item of buildPdfPairMergeOrder(pdfOnePageCount, pdfTwoPageCount, orderMode)) {
     mergedPdf.addPage(item.source === "one" ? pdfOnePages[item.pageIndex] : pdfTwoPages[item.pageIndex]);
   }
 
   return mergedPdf.save();
 }
 
-function buildPdfPairMergeOrder(pdfOnePageCount: number, pdfTwoPageCount: number) {
+function buildPdfPairMergeOrder(
+  pdfOnePageCount: number,
+  pdfTwoPageCount: number,
+  orderMode: MergePdfOrderMode
+) {
   const order: Array<{ source: MergePdfSlot; pageIndex: number }> = [];
   let pdfOneIndex = 0;
   let pdfTwoIndex = 0;
+  const leadingPdfOnePages = orderMode === "first-two-from-first" ? 2 : 1;
 
-  while (pdfOneIndex < Math.min(2, pdfOnePageCount)) {
+  while (pdfOneIndex < Math.min(leadingPdfOnePages, pdfOnePageCount)) {
     order.push({ source: "one", pageIndex: pdfOneIndex });
     pdfOneIndex += 1;
   }
