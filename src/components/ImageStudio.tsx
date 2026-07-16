@@ -104,6 +104,7 @@ interface ImageStudioProps {
 }
 
 type ResultsView = "keyword" | "provider";
+type SavedImagesDownloadMode = "original" | "preview";
 
 interface ProviderStatus {
   provider: string;
@@ -132,10 +133,11 @@ interface ImageLibraryPanelProps {
   loadingLibrary: boolean;
   uploadingLocal: boolean;
   downloadingRootZip: boolean;
+  downloadingPreviewZip: boolean;
   removingAll: boolean;
   deletingPath: string | null;
   onRefresh: () => Promise<void>;
-  onDownloadRootZip: () => Promise<void>;
+  onDownloadRootZip: (mode?: SavedImagesDownloadMode) => Promise<void>;
   onRemoveAll: () => Promise<boolean>;
   onDeleteFile: (relativePath: string) => Promise<void>;
   onReorder: (folderKey: string, nextFiles: LibraryFile[]) => Promise<void>;
@@ -166,6 +168,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [downloadingImageId, setDownloadingImageId] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus[] | null>(null);
   const [library, setLibrary] = useState<LibraryPayload | null>(null);
@@ -174,8 +177,10 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
   const [loadingLibrary, setLoadingLibrary] = useState(false);
   const [uploadingLocal, setUploadingLocal] = useState(false);
   const [downloadingRootZip, setDownloadingRootZip] = useState(false);
+  const [downloadingPreviewZip, setDownloadingPreviewZip] = useState(false);
   const [minFileSizeInput, setMinFileSizeInput] = useState("");
   const [minPixelsInput, setMinPixelsInput] = useState("");
+  const [applyMinPixelsToScrapingWin, setApplyMinPixelsToScrapingWin] = useState(false);
   const [resultsView, setResultsView] = useState<ResultsView>("keyword");
   const [deletingPath, setDeletingPath] = useState<string | null>(null);
   const [removingAll, setRemovingAll] = useState(false);
@@ -237,6 +242,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
       setMaxResults(parsed.maxResults);
       setMinFileSizeInput(parsed.minFileSizeInput);
       setMinPixelsInput(parsed.minPixelsInput);
+      setApplyMinPixelsToScrapingWin(parsed.applyMinPixelsToScrapingWin);
       setSelectedProviders(new Set(parsed.selectedProviders));
       setKeywordGroups(parsed.keywordGroups);
       setProviderStatus(parsed.providerStatus);
@@ -344,6 +350,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
           limit,
           minSizeKb,
           minPixels,
+          applyMinPixelsToScrapingWin,
           providers: selectedProviderValues,
           keys: apiKeys,
         }),
@@ -362,6 +369,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
         maxResults: limit,
         minFileSizeInput,
         minPixelsInput,
+        applyMinPixelsToScrapingWin,
         selectedProviders: selectedProviderValues,
         keywordGroups: groups,
         providerStatus: sources,
@@ -371,7 +379,16 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
     } finally {
       setIsSearching(false);
     }
-  }, [apiKeys, keywordInput, keywords, maxResults, minFileSizeInput, minPixelsInput, selectedProviders]);
+  }, [
+    apiKeys,
+    applyMinPixelsToScrapingWin,
+    keywordInput,
+    keywords,
+    maxResults,
+    minFileSizeInput,
+    minPixelsInput,
+    selectedProviders,
+  ]);
 
   const handleSave = useCallback(
     async (image: ImageResult) => {
@@ -424,6 +441,44 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
     },
     [refreshLibrary]
   );
+
+  const handleDownloadFetchedImage = useCallback(async (image: ImageResult) => {
+    setDownloadingImageId(image.id);
+    setSaveMessage(null);
+    try {
+      const response = await fetch("/api/images/fetched-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fullsizeUrl: image.fullsizeUrl || undefined,
+          previewUrl: image.previewUrl,
+          source: image.source,
+          title: image.title?.trim() || undefined,
+          provider: image.provider,
+        }),
+      });
+      if (!response.ok) {
+        const detail = await response.json().catch(() => ({}));
+        throw new Error(detail.error || "Failed to download image");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = getDownloadFileName(response.headers.get("content-disposition")) || "fetched-image.jpg";
+      anchor.click();
+      window.URL.revokeObjectURL(url);
+      setSaveMessage({ text: `Downloaded ${anchor.download}`, tone: "success" });
+    } catch (error) {
+      setSaveMessage({
+        text: error instanceof Error ? error.message : "Failed to download image",
+        tone: "error",
+      });
+    } finally {
+      setDownloadingImageId(null);
+    }
+  }, []);
 
   const handleDeleteFile = useCallback(
     async (relativePath: string) => {
@@ -480,11 +535,21 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
     }
   }, [refreshLibrary]);
 
-  const handleDownloadRootZip = useCallback(async () => {
-    setDownloadingRootZip(true);
+  const handleDownloadRootZip = useCallback(async (mode: SavedImagesDownloadMode = "original") => {
+    const isPreviewMode = mode === "preview";
+    if (isPreviewMode) {
+      setDownloadingPreviewZip(true);
+    } else {
+      setDownloadingRootZip(true);
+    }
     setLibraryNotice(null);
     try {
-      const response = await fetch("/api/images?download=zip", { cache: "no-store" });
+      const params = new URLSearchParams({ download: "zip" });
+      if (isPreviewMode) {
+        params.set("crop", "preview");
+        params.set("aspectRatio", String(cropPreviewAspectRatio));
+      }
+      const response = await fetch(`/api/images?${params.toString()}`, { cache: "no-store" });
       if (!response.ok) {
         const detail = await response.json().catch(() => ({}));
         throw new Error(detail.error || "Failed to download ZIP");
@@ -504,9 +569,13 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
         tone: "error",
       });
     } finally {
-      setDownloadingRootZip(false);
+      if (isPreviewMode) {
+        setDownloadingPreviewZip(false);
+      } else {
+        setDownloadingRootZip(false);
+      }
     }
-  }, []);
+  }, [cropPreviewAspectRatio]);
 
   const providerBuckets = useMemo(() => {
     const map = new Map<ProviderValue, { provider: ProviderValue; keywords: Array<{ keyword: string; results: ImageResult[]; error: string | null }> }>();
@@ -550,7 +619,8 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
     () => keywordLibraryStatus.filter((entry) => entry.totalFetched > 0 && entry.savedCount === 0),
     [keywordLibraryStatus]
   );
-  const isResultsActionBusy = downloadingFetchedZip || downloadingRootZip || pendingResultsAction !== null || removingAll;
+  const isResultsActionBusy =
+    downloadingFetchedZip || downloadingRootZip || downloadingPreviewZip || pendingResultsAction !== null || removingAll;
 
   const persistCurrentSearchState = useCallback(
     (nextKeywordGroups: KeywordGroup[], nextProviderStatus: ProviderStatus[] | null) => {
@@ -559,12 +629,13 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
         maxResults: clampResultLimit(maxResults, defaultLimit),
         minFileSizeInput,
         minPixelsInput,
+        applyMinPixelsToScrapingWin,
         selectedProviders: Array.from(selectedProviders),
         keywordGroups: nextKeywordGroups,
         providerStatus: nextProviderStatus,
       });
     },
-    [defaultLimit, keywordInput, maxResults, minFileSizeInput, minPixelsInput, selectedProviders]
+    [applyMinPixelsToScrapingWin, defaultLimit, keywordInput, maxResults, minFileSizeInput, minPixelsInput, selectedProviders]
   );
 
   const clearFetchedResults = useCallback(() => {
@@ -762,6 +833,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
     const sourceUrl = result.fullsizeUrl || result.previewUrl;
     const savedPath = sourceUrl && library?.sourcesByUrl ? library.sourcesByUrl[sourceUrl] : undefined;
     const isSaving = savingId === result.id;
+    const isDownloading = downloadingImageId === result.id;
     const isRemoving = savedPath ? deletingPath === savedPath : false;
     return (
       <article
@@ -775,8 +847,35 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
             className="h-full w-full object-cover"
             loading="lazy"
           />
+          <button
+            type="button"
+            onClick={() => void handleDownloadFetchedImage(result)}
+            disabled={isDownloading}
+            aria-label={`Download ${result.title || result.source || "fetched image"}`}
+            title="Download image"
+            className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-950 shadow-sm transition hover:border-zinc-400 hover:bg-zinc-50 disabled:opacity-60"
+          >
+            {isDownloading ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-950" aria-hidden="true" />
+            ) : (
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+            )}
+          </button>
           {savedPath && (
-            <span className="absolute right-2 top-2 rounded-full bg-emerald-600/95 px-2 py-1 text-xs font-semibold text-white">
+            <span className="absolute left-2 top-2 rounded-full bg-emerald-600/95 px-2 py-1 text-xs font-semibold text-white">
               Saved
             </span>
           )}
@@ -1010,6 +1109,20 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
             />
           </label>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700">
+          <input
+            type="checkbox"
+            checked={applyMinPixelsToScrapingWin}
+            onChange={(event) => setApplyMinPixelsToScrapingWin(event.target.checked)}
+            className="mt-1"
+          />
+          <span>
+            <span className="block font-medium text-zinc-900">Apply min width/height to DuckDuckGo results</span>
+            <span className="block text-xs text-zinc-500">
+              When enabled, ScrapWin images without both dimensions or below the pixel value are filtered out.
+            </span>
+          </span>
+        </label>
         <button
           type="button"
           onClick={handleSearch}
@@ -1103,6 +1216,14 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
                     className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
                   >
                     {downloadingRootZip ? "Preparing saved ZIP…" : "Download saved images"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadRootZip("preview")}
+                    disabled={isResultsActionBusy || downloadingPreviewZip || savedImageCount === 0}
+                    className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+                  >
+                    {downloadingPreviewZip ? "Preparing crops…" : "Download preview crops"}
                   </button>
                   <button
                     type="button"
@@ -1233,6 +1354,7 @@ export function ImageStudio({ defaultLimit = 10, pageSize = "square" }: ImageStu
         loadingLibrary={loadingLibrary}
         uploadingLocal={uploadingLocal}
         downloadingRootZip={downloadingRootZip}
+        downloadingPreviewZip={downloadingPreviewZip}
         removingAll={removingAll}
         deletingPath={deletingPath}
         onRefresh={refreshLibrary}
@@ -1323,6 +1445,7 @@ function ImageLibraryPanel({
   loadingLibrary,
   uploadingLocal,
   downloadingRootZip,
+  downloadingPreviewZip,
   removingAll,
   deletingPath,
   onRefresh,
@@ -1573,6 +1696,7 @@ function ImageLibraryPanel({
               removingAll ||
               uploadingLocal ||
               downloadingRootZip ||
+              downloadingPreviewZip ||
               reorderingFolder !== null ||
               !library ||
               displayFiles.length === 0
@@ -1736,10 +1860,30 @@ function ImageLibraryPanel({
                         <button
                           type="button"
                           onClick={() => void onDownloadRootZip()}
-                          disabled={uploadingLocal || downloadingRootZip || reorderingFolder !== null || section.files.length === 0}
+                          disabled={
+                            uploadingLocal ||
+                            downloadingRootZip ||
+                            downloadingPreviewZip ||
+                            reorderingFolder !== null ||
+                            section.files.length === 0
+                          }
                           className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
                         >
                           {downloadingRootZip ? "Preparing ZIP…" : "Download ZIP"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void onDownloadRootZip("preview")}
+                          disabled={
+                            uploadingLocal ||
+                            downloadingRootZip ||
+                            downloadingPreviewZip ||
+                            reorderingFolder !== null ||
+                            section.files.length === 0
+                          }
+                          className="rounded-md border border-zinc-300 px-3 py-2 text-xs font-semibold text-zinc-800 transition hover:border-black disabled:opacity-60"
+                        >
+                          {downloadingPreviewZip ? "Preparing crops…" : "Download preview crops"}
                         </button>
                         <span className="text-xs text-zinc-500">
                           {section.files.length} image{section.files.length === 1 ? "" : "s"}
@@ -1874,6 +2018,7 @@ function parseSearchCache(raw: string, defaultLimit: number) {
     maxResults: unknown;
     minFileSizeInput: unknown;
     minPixelsInput: unknown;
+    applyMinPixelsToScrapingWin: unknown;
     selectedProviders: unknown;
     keywordGroups: unknown;
     providerStatus: unknown;
@@ -1888,6 +2033,7 @@ function parseSearchCache(raw: string, defaultLimit: number) {
     maxResults: clampResultLimit(parsed.maxResults, defaultLimit),
     minFileSizeInput: typeof parsed.minFileSizeInput === "string" ? parsed.minFileSizeInput : "",
     minPixelsInput: typeof parsed.minPixelsInput === "string" ? parsed.minPixelsInput : "",
+    applyMinPixelsToScrapingWin: parsed.applyMinPixelsToScrapingWin === true,
     selectedProviders: normalizeSelectedProviders(parsed.selectedProviders),
     keywordGroups: parsed.keywordGroups as KeywordGroup[],
     providerStatus: Array.isArray(parsed.providerStatus) ? (parsed.providerStatus as ProviderStatus[]) : null,
@@ -1899,6 +2045,7 @@ function persistSearchCache(payload: {
   maxResults: number;
   minFileSizeInput: string;
   minPixelsInput: string;
+  applyMinPixelsToScrapingWin: boolean;
   selectedProviders: ProviderValue[];
   keywordGroups: KeywordGroup[];
   providerStatus: ProviderStatus[] | null;

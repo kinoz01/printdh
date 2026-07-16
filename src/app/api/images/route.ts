@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { zipSync } from "fflate";
+import sharp from "sharp";
 import { z } from "zod";
 
 const IMAGES_ROOT = path.resolve(process.cwd(), "..", "images");
@@ -38,7 +39,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     if (searchParams.get("download") === "zip") {
       const folderKey = normalizeFolderKey(searchParams.get("folder") ?? "");
-      return await downloadLibraryZip(folderKey);
+      const previewAspectRatio = searchParams.get("crop") === "preview" ? parsePreviewAspectRatio(searchParams.get("aspectRatio")) : null;
+      return await downloadLibraryZip(folderKey, previewAspectRatio);
     }
     const { folders, files, sourcesByUrl } = await readLibrary();
     const filesWithPreview = files.map((file) => ({
@@ -57,7 +59,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function downloadLibraryZip(folderKey: string) {
+async function downloadLibraryZip(folderKey: string, previewAspectRatio: number | null) {
   const files = await collectOrderedFilesForFolder(folderKey);
   if (files.length === 0) {
     return NextResponse.json(
@@ -67,15 +69,37 @@ async function downloadLibraryZip(folderKey: string) {
   }
 
   const zipEntries: Record<string, Uint8Array> = {};
+  const failures: string[] = [];
+  const usedNames = new Set<string>();
   for (const file of files) {
-    const filePath = resolveLibraryPath(file.relativePath);
-    zipEntries[file.name] = new Uint8Array(await fs.readFile(filePath));
+    try {
+      const filePath = resolveLibraryPath(file.relativePath);
+      if (previewAspectRatio) {
+        const croppedBytes = await cropImageToPreviewAspect(filePath, file.name, previewAspectRatio);
+        zipEntries[buildUniqueZipEntryName(usedNames, buildPreviewCropFileName(file.name))] = new Uint8Array(croppedBytes);
+      } else {
+        zipEntries[buildUniqueZipEntryName(usedNames, file.name)] = new Uint8Array(await fs.readFile(filePath));
+      }
+    } catch (error) {
+      failures.push(`${file.relativePath}: ${error instanceof Error ? error.message : "Failed to add image"}`);
+    }
+  }
+
+  if (Object.keys(zipEntries).length === 0) {
+    return NextResponse.json(
+      { error: failures.join("; ") || "No images could be added to the ZIP" },
+      { status: 500 }
+    );
+  }
+
+  if (failures.length > 0) {
+    zipEntries["download-failures.txt"] = new TextEncoder().encode(failures.join("\n"));
   }
 
   const zipBytes = zipSync(zipEntries, { level: 0 });
   const zipBuffer = new ArrayBuffer(zipBytes.byteLength);
   new Uint8Array(zipBuffer).set(zipBytes);
-  const filename = buildLibraryZipFileName(folderKey);
+  const filename = buildLibraryZipFileName(folderKey, Boolean(previewAspectRatio));
   return new NextResponse(zipBuffer, {
     status: 200,
     headers: {
@@ -84,6 +108,52 @@ async function downloadLibraryZip(folderKey: string) {
       "Cache-Control": "no-store",
     },
   });
+}
+
+function parsePreviewAspectRatio(value: string | null) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0 || parsed > 20) {
+    throw new Error("Missing or invalid preview aspect ratio");
+  }
+  return parsed;
+}
+
+async function cropImageToPreviewAspect(filePath: string, filename: string, targetAspectRatio: number) {
+  const sourceBytes = await fs.readFile(filePath);
+  const image = sharp(sourceBytes, { animated: true, failOn: "none" });
+  const metadata = await image.metadata();
+  const sourceWidth = metadata.width ?? 0;
+  const sourceHeight = metadata.pageHeight ?? metadata.height ?? 0;
+  if (sourceWidth <= 0 || sourceHeight <= 0) {
+    throw new Error("Unable to read image dimensions");
+  }
+
+  const sourceAspectRatio = sourceWidth / sourceHeight;
+  let left = 0;
+  let top = 0;
+  let width = sourceWidth;
+  let height = sourceHeight;
+
+  if (sourceAspectRatio > targetAspectRatio) {
+    width = Math.max(1, Math.round(sourceHeight * targetAspectRatio));
+    left = Math.max(0, Math.floor((sourceWidth - width) / 2));
+  } else if (sourceAspectRatio < targetAspectRatio) {
+    height = Math.max(1, Math.round(sourceWidth / targetAspectRatio));
+    top = Math.max(0, Math.floor((sourceHeight - height) / 2));
+  }
+
+  const pipeline = image.extract({ left, top, width, height });
+  const extension = path.extname(filename).toLowerCase();
+  if (extension === ".png") {
+    return await pipeline.png().toBuffer();
+  }
+  if (extension === ".webp") {
+    return await pipeline.webp().toBuffer();
+  }
+  if (extension === ".gif") {
+    return await pipeline.gif().toBuffer();
+  }
+  return await pipeline.jpeg({ quality: 92 }).toBuffer();
 }
 
 export async function POST(request: NextRequest) {
@@ -651,11 +721,34 @@ function buildPreviewUrl(relativePath: string) {
   return `/api/image-preview?path=${encodeURIComponent(relativePath)}`;
 }
 
-function buildLibraryZipFileName(folderKey: string) {
+function buildLibraryZipFileName(folderKey: string, isPreviewCrop = false) {
+  const suffix = isPreviewCrop ? "preview-crops" : "images";
   if (!folderKey) {
-    return "root-folder-images.zip";
+    return `root-folder-${suffix}.zip`;
   }
-  return `${folderKey.replace(/[\\/]+/g, "-")}-images.zip`;
+  return `${folderKey.replace(/[\\/]+/g, "-")}-${suffix}.zip`;
+}
+
+function buildPreviewCropFileName(filename: string) {
+  const extension = path.extname(filename);
+  const stem = extension ? filename.slice(0, -extension.length) : filename;
+  return `${stem || "image"}-preview-crop${extension || ".jpg"}`;
+}
+
+function buildUniqueZipEntryName(usedNames: Set<string>, filename: string) {
+  if (!usedNames.has(filename)) {
+    usedNames.add(filename);
+    return filename;
+  }
+  const extension = path.extname(filename);
+  const stem = extension ? filename.slice(0, -extension.length) : filename;
+  let suffix = 2;
+  while (usedNames.has(`${stem}-${suffix}${extension}`)) {
+    suffix += 1;
+  }
+  const uniqueName = `${stem}-${suffix}${extension}`;
+  usedNames.add(uniqueName);
+  return uniqueName;
 }
 
 async function collectFolderOrders(directory: string, relative = ""): Promise<Record<string, string[]>> {

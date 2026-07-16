@@ -18,6 +18,7 @@ const requestSchema = z.object({
   limit: z.number().int().min(3).max(60).optional(),
   minSizeKb: z.number().int().min(0).max(200000).optional(),
   minPixels: z.number().int().min(0).max(10000).optional(),
+  applyMinPixelsToScrapingWin: z.boolean().optional(),
   providers: z.array(z.enum(PROVIDERS)).min(1),
   keys: z
     .object({
@@ -51,6 +52,7 @@ interface SearchOptions {
   limit: number;
   minFileSizeBytes?: number;
   minPixels?: number;
+  applyMinPixelsToScrapingWin: boolean;
   keys: ProviderKeys;
   uniqueProviders: Provider[];
   activeProviders: Provider[];
@@ -156,6 +158,7 @@ function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptio
   const minSizeKb = typeof payload.minSizeKb === "number" ? payload.minSizeKb : undefined;
   const minFileSizeBytes = typeof minSizeKb === "number" && minSizeKb > 0 ? minSizeKb * 1024 : undefined;
   const minPixels = typeof payload.minPixels === "number" && payload.minPixels > 0 ? payload.minPixels : undefined;
+  const applyMinPixelsToScrapingWin = Boolean(payload.applyMinPixelsToScrapingWin);
   const envDefaults = getServerProviderKeys();
   const keys: ProviderKeys = {
     googleApiKey: payload.keys?.googleApiKey || envDefaults.googleApiKey,
@@ -169,6 +172,7 @@ function buildSearchOptions(payload: z.infer<typeof requestSchema>): SearchOptio
     limit,
     minFileSizeBytes,
     minPixels,
+    applyMinPixelsToScrapingWin,
     keys,
     uniqueProviders,
     activeProviders,
@@ -189,7 +193,15 @@ async function runSearch(options: SearchOptions) {
   for (const keyword of options.keywords) {
     const providers = await Promise.all(
       options.activeProviders.map((provider) =>
-        searchProviderForKeyword(provider, keyword, options.limit, options.minFileSizeBytes, options.minPixels, options.keys)
+        searchProviderForKeyword(
+          provider,
+          keyword,
+          options.limit,
+          options.minFileSizeBytes,
+          options.minPixels,
+          options.applyMinPixelsToScrapingWin,
+          options.keys
+        )
       )
     );
 
@@ -219,10 +231,11 @@ async function searchProviderForKeyword(
   limit: number,
   minFileSizeBytes: number | undefined,
   minPixels: number | undefined,
+  applyMinPixelsToScrapingWin: boolean,
   keys: ProviderKeys
 ): Promise<ProviderBucket> {
   try {
-    const providerMinPixels = provider === "scraping-win" ? undefined : minPixels;
+    const providerMinPixels = provider === "scraping-win" && !applyMinPixelsToScrapingWin ? undefined : minPixels;
     const providerLimit = shouldOverfetchForFilters(providerMinPixels) ? limit * FILTER_FETCH_MULTIPLIER : limit;
     const promise = buildProviderPromise(provider, keyword, providerLimit, keys);
     if (!promise) {
