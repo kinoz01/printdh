@@ -54,6 +54,8 @@ const schema = z.object({
   fineTuneBackgrounds: z.boolean().optional(),
   backgroundlessContentImageIndexes: z.array(z.number().int().min(0)).optional(),
   stretchContentImages: z.boolean().optional(),
+  imageFrameEnabled: z.boolean().optional(),
+  imageFrameThickness: z.number().min(0).optional(),
   showPageNumbers: z.boolean().optional(),
   pageNumberPosition: z.enum(["alternating", "center"]).optional(),
   pageSize: z.enum(["square", "us-letter", "hardcover"]).optional(),

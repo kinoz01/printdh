@@ -845,6 +845,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     useState<UploadedPageNumberPosition>("alternating");
   const [uploadedContentPadding, setUploadedContentPadding] = useState(0.32);
   const [uploadedStretchContentImages, setUploadedStretchContentImages] = useState(false);
+  const [uploadedImageFrameEnabled, setUploadedImageFrameEnabled] = useState(false);
+  const [uploadedImageFrameThickness, setUploadedImageFrameThickness] = useState(0.05);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -1845,6 +1847,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
         ? uploadedBackgroundlessContentImageIndexes
         : [];
       base.stretchContentImages = uploadedStretchContentImages;
+      if (isUploadedImagesMode) {
+        const safeUploadedImageFrameThickness = Number.isFinite(uploadedImageFrameThickness)
+          ? uploadedImageFrameThickness
+          : 0.05;
+        base.imageFrameEnabled = uploadedImageFrameEnabled;
+        base.imageFrameThickness = uploadedImageFrameEnabled ? Math.max(0, safeUploadedImageFrameThickness) * 72 : 0;
+      }
       base.showPageNumbers = uploadedShowPageNumbers;
       if (uploadedShowPageNumbers) {
         base.numberBadgeColor = numberBadgeColor;
@@ -1902,6 +1911,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
   }, [
     mode,
     isUploadedPagesMode,
+    isUploadedImagesMode,
     isCaptionBoxMode,
     imageLibrary,
     numberBadgeColor,
@@ -1910,6 +1920,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
     uploadedBackgroundlessContentImageIndexes,
     uploadedFineTuneBackgrounds,
     uploadedPageNumberPosition,
+    uploadedImageFrameEnabled,
+    uploadedImageFrameThickness,
     uploadedSequentialBackgroundImages,
     uploadedShowPageNumbers,
     uploadedStretchContentImages,
@@ -2128,7 +2140,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 <span className="text-xs text-zinc-500">
                   {uploadedStretchContentImages
                     ? "Ignored while stretch mode is enabled."
-                    : "Use 0 to fit content to the full page bounds."}
+                    : isUploadedImagesMode && uploadedImageFrameEnabled
+                      ? `Use 0 to fit the framed image inside the page bounds.`
+                      : "Use 0 to fit content to the full page bounds."}
                 </span>
               </label>
               <label className="flex items-center justify-between gap-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
@@ -2148,6 +2162,39 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   className="h-5 w-5 shrink-0 accent-black"
                 />
               </label>
+              {isUploadedImagesMode ? (
+                <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <label className="flex items-center justify-between gap-4">
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-zinc-900">Image frame</span>
+                      <span className="block text-xs text-zinc-600">
+                        Draw a black frame around each content image, inside the selected page padding.
+                      </span>
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={uploadedImageFrameEnabled}
+                      onChange={(event) => setUploadedImageFrameEnabled(event.target.checked)}
+                      className="h-5 w-5 shrink-0 accent-black"
+                    />
+                  </label>
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-sm font-medium text-zinc-700">Frame thickness (inches)</span>
+                    <input
+                      type="number"
+                      min={0.01}
+                      step={0.01}
+                      value={uploadedImageFrameThickness}
+                      disabled={!uploadedImageFrameEnabled}
+                      onChange={(event) => {
+                        const nextValue = Number(event.target.value);
+                        setUploadedImageFrameThickness(Number.isNaN(nextValue) ? 0.01 : Math.max(0.01, nextValue));
+                      }}
+                      className="w-32 rounded-md border border-zinc-300 px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
+                    />
+                  </label>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
@@ -2260,7 +2307,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 description={
                   uploadedStretchContentImages
                     ? "Stretched horizontally and vertically to match the full PDF page."
-                    : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
+                    : uploadedImageFrameEnabled
+                      ? `Centered with a ${uploadedImageFrameThickness.toFixed(2)}in frame around the image and ${uploadedContentPadding.toFixed(2)}in page padding.`
+                      : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
                 }
                 files={uploadedContentFiles}
                 onFilesSelected={handleUploadedContentFiles}

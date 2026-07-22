@@ -1,7 +1,8 @@
-import path from "path";
 import { NextResponse } from "next/server";
 import { zipSync } from "fflate";
 import { z } from "zod";
+
+import { convertWebpDownloadToPng, pickImageDownloadExtension } from "@/lib/image-download";
 
 const imageResultSchema = z.object({
   previewUrl: z.string().url(),
@@ -46,12 +47,13 @@ export async function POST(request: Request) {
           folderImageIndex += 1;
           addedCount += 1;
 
-          const extension = pickExtension(downloaded.contentType, downloaded.url);
+          const image = await convertWebpDownloadToPng(downloaded);
+          const extension = pickImageDownloadExtension(image.contentType, image.url);
           const filename = buildFileName(
             `${String(folderImageIndex).padStart(2, "0")}-${result.provider}-${result.title || result.source || "image"}`,
             extension
           );
-          zipEntries[`${folderName}/${filename}`] = downloaded.bytes;
+          zipEntries[`${folderName}/${filename}`] = image.bytes;
         }
       }
     }
@@ -126,34 +128,4 @@ function buildFileName(value: string, extension: string) {
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
   return `${slug || "image"}${extension}`;
-}
-
-function pickExtension(contentType: string | null, url: string) {
-  const mimeMap: Record<string, string> = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "image/svg+xml": ".svg",
-    "image/avif": ".avif",
-  };
-
-  if (contentType) {
-    const normalizedContentType = contentType.split(";")[0]?.trim().toLowerCase();
-    if (normalizedContentType && mimeMap[normalizedContentType]) {
-      return mimeMap[normalizedContentType];
-    }
-  }
-
-  try {
-    const parsed = new URL(url);
-    const extension = path.extname(parsed.pathname).toLowerCase();
-    if (extension) {
-      return extension;
-    }
-  } catch {
-    // ignore malformed URLs and fall back to JPG
-  }
-
-  return ".jpg";
 }

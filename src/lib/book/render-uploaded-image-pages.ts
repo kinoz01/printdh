@@ -8,6 +8,13 @@ const PAGE_NUMBER_RADIUS = 0.24 * POINTS_PER_INCH;
 const PAGE_NUMBER_TEXT_COLOR = rgb(1, 1, 1);
 type PageNumberPosition = "alternating" | "center";
 
+interface ImageBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface RenderUploadedImagePagesOptions {
   backgroundImageAssets?: ImageAsset[];
   contentImageAssets?: ImageAsset[];
@@ -19,6 +26,8 @@ export interface RenderUploadedImagePagesOptions {
   fineTuneBackgrounds?: boolean;
   backgroundlessContentImageIndexes?: number[];
   stretchContentImages?: boolean;
+  imageFrameEnabled?: boolean;
+  imageFrameThickness?: number;
   showPageNumbers?: boolean;
   pageNumberPosition?: PageNumberPosition;
   pageNumberFill?: ReturnType<typeof rgb>;
@@ -36,6 +45,8 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     fineTuneBackgrounds = false,
     backgroundlessContentImageIndexes = [],
     stretchContentImages = false,
+    imageFrameEnabled = false,
+    imageFrameThickness = 0,
     showPageNumbers = false,
     pageNumberPosition = "alternating",
     pageNumberFill = rgb(0, 0, 0),
@@ -50,6 +61,9 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   const backgroundImages = await embedImages(pdf, backgroundImageAssets);
   const contentImages = await embedImages(pdf, contentImageAssets);
   const resolvedContentPadding = Math.max(0, contentPadding);
+  const resolvedImageFrameThickness = imageFrameEnabled
+    ? Math.min(Math.max(0, imageFrameThickness), pageWidth / 2, pageHeight / 2)
+    : 0;
   const pageNumberFont = showPageNumbers ? await pdf.embedFont(StandardFonts.HelveticaBold) : null;
   const backgroundlessContentIndexes = fineTuneBackgrounds
     ? new Set(backgroundlessContentImageIndexes.filter((index) => index < contentImages.length))
@@ -73,17 +87,22 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
       drawWhiteBackground(page, pageWidth, pageHeight);
     }
 
+    let contentBounds: ImageBounds;
     if (stretchContentImages || isBackgroundlessContent) {
-      drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
+      contentBounds = drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
     } else {
-      drawContainedImage(
+      contentBounds = drawContainedImage(
         page,
         contentImages[contentIndex],
         contentImageAssets[contentIndex],
         pageWidth,
         pageHeight,
-        resolvedContentPadding
+        resolvedContentPadding + resolvedImageFrameThickness
       );
+    }
+
+    if (resolvedImageFrameThickness > 0) {
+      drawImageFrame(page, contentBounds, pageWidth, pageHeight, resolvedImageFrameThickness);
     }
 
     if (pageNumberFont && pageIndex > 0 && pageIndex < pageCount - 1) {
@@ -123,13 +142,14 @@ function resolveBackgroundIndex(pageIndex: number, backgroundCount: number, sequ
   return (Math.floor((pageIndex - 1) / 2) + 1) % backgroundCount;
 }
 
-function drawStretchedImage(page: PDFPage, image: PDFImage, pageWidth: number, pageHeight: number) {
+function drawStretchedImage(page: PDFPage, image: PDFImage, pageWidth: number, pageHeight: number): ImageBounds {
   page.drawImage(image, {
     x: 0,
     y: 0,
     width: pageWidth,
     height: pageHeight,
   });
+  return { x: 0, y: 0, width: pageWidth, height: pageHeight };
 }
 
 function drawContainedImage(
@@ -139,7 +159,7 @@ function drawContainedImage(
   pageWidth: number,
   pageHeight: number,
   padding: number
-) {
+): ImageBounds {
   const availableWidth = Math.max(1, pageWidth - padding * 2);
   const availableHeight = Math.max(1, pageHeight - padding * 2);
   const scale = Math.min(availableWidth / assetMeta.width, availableHeight / assetMeta.height);
@@ -149,6 +169,28 @@ function drawContainedImage(
   const y = (pageHeight - height) / 2;
 
   page.drawImage(image, { x, y, width, height });
+  return { x, y, width, height };
+}
+
+function drawImageFrame(
+  page: PDFPage,
+  bounds: ImageBounds,
+  pageWidth: number,
+  pageHeight: number,
+  thickness: number
+) {
+  const x = Math.max(thickness / 2, bounds.x - thickness / 2);
+  const y = Math.max(thickness / 2, bounds.y - thickness / 2);
+  const right = Math.min(pageWidth - thickness / 2, bounds.x + bounds.width + thickness / 2);
+  const top = Math.min(pageHeight - thickness / 2, bounds.y + bounds.height + thickness / 2);
+  page.drawRectangle({
+    x,
+    y,
+    width: Math.max(0, right - x),
+    height: Math.max(0, top - y),
+    borderColor: rgb(0, 0, 0),
+    borderWidth: thickness,
+  });
 }
 
 function drawPageNumber(

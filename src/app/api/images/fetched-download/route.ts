@@ -1,6 +1,7 @@
-import path from "path";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+
+import { convertWebpDownloadToPng, pickImageDownloadExtension } from "@/lib/image-download";
 
 const fetchedImageDownloadSchema = z
   .object({
@@ -23,18 +24,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unable to download fetched image." }, { status: 502 });
     }
 
-    const extension = pickExtension(downloaded.contentType, downloaded.url);
+    const image = await convertWebpDownloadToPng(downloaded);
+    const extension = pickImageDownloadExtension(image.contentType, image.url);
     const filename = buildFileName(
       `${payload.provider || "fetched"}-${payload.title || payload.source || "image"}`,
       extension
     );
-    const responseBody = new ArrayBuffer(downloaded.bytes.byteLength);
-    new Uint8Array(responseBody).set(downloaded.bytes);
+    const responseBody = new ArrayBuffer(image.bytes.byteLength);
+    new Uint8Array(responseBody).set(image.bytes);
 
     return new NextResponse(responseBody, {
       status: 200,
       headers: {
-        "Content-Type": downloaded.contentType || "application/octet-stream",
+        "Content-Type": image.contentType || "application/octet-stream",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-store",
       },
@@ -84,34 +86,4 @@ function buildFileName(value: string, extension: string) {
     .replace(/^-+|-+$/g, "")
     .replace(/-{2,}/g, "-");
   return `${slug || "image"}${extension}`;
-}
-
-function pickExtension(contentType: string | null, url: string) {
-  const mimeMap: Record<string, string> = {
-    "image/png": ".png",
-    "image/jpeg": ".jpg",
-    "image/webp": ".webp",
-    "image/gif": ".gif",
-    "image/svg+xml": ".svg",
-    "image/avif": ".avif",
-  };
-
-  if (contentType) {
-    const normalizedContentType = contentType.split(";")[0]?.trim().toLowerCase();
-    if (normalizedContentType && mimeMap[normalizedContentType]) {
-      return mimeMap[normalizedContentType];
-    }
-  }
-
-  try {
-    const parsed = new URL(url);
-    const extension = path.extname(parsed.pathname).toLowerCase();
-    if (extension) {
-      return extension;
-    }
-  } catch {
-    // ignore malformed URLs and fall back to JPG
-  }
-
-  return ".jpg";
 }
