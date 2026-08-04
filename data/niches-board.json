@@ -1192,6 +1192,43 @@
       },
       "id": "94e2ec29-2656-4fa3-b922-a318d376a16f",
       "createdAt": "2026-07-21T12:05:49.631Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Teacher-Created-Materials/author/B01GVDPJWI?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Teacher-Created-Materials/author/B01GVDPJWI?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Teacher Created Materials: books, biography, latest update",
+        "description": "Follow Teacher Created Materials and explore their bibliography from Amazon&#039;s Teacher Created Materials Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/3kgkal68a5gg43dad1kq6eih61.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "7dbed1d9-a4f9-4e82-9379-8e3c40e40f6b",
+      "createdAt": "2026-07-22T01:53:06.306Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Andy-Herbach/author/B002BMF31G?ref=sr_ntt_srch_lnk_7&qid=1784732635&sr=8-7&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Andy-Herbach/author/B002BMF31G?ref=sr_ntt_srch_lnk_7&qid=1784732635&sr=8-7&shoppingPortalEnabled=true",
+        "title": "Andy Herbach: books, biography, latest update",
+        "siteName": "amazon.com"
+      },
+      "id": "a0dbe554-897f-4244-b708-4429c137a4cf",
+      "createdAt": "2026-07-22T15:05:47.602Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B0FKVG3DHK/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=AZnlD&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=134-1970082-8965339&pd_rd_wg=0iTs9&pd_rd_r=5da83a89-768f-412c-b05d-d522c6b711b9&ccs_id=e830a81a-c5ae-4c3c-ae09-32cfbe02cabb",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B0FKVG3DHK/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=AZnlD&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=134-1970082-8965339&pd_rd_wg=0iTs9&pd_rd_r=5da83a89-768f-412c-b05d-d522c6b711b9&ccs_id=e830a81a-c5ae-4c3c-ae09-32cfbe02cabb",
+        "title": "Claire Monroe: books, biography, latest update",
+        "description": "Follow Claire Monroe and explore their bibliography from Amazon&#039;s Claire Monroe Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/oenjarra375s1rlu4vtkhk218i.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "e5dcba5c-7aef-446e-b226-59b96751be01",
+      "createdAt": "2026-07-24T11:38:19.254Z"
     }
   ]
 }

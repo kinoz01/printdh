@@ -1,17 +1,14 @@
 import Link from "next/link";
-import { MetadataManager } from "@/components/MetadataManager";
+import { HardcoverPdfResizer } from "@/components/HardcoverPdfResizer";
 
-export default function MetadataPage() {
+export default function HardcoverResizerPage() {
   return (
     <main className="min-h-screen bg-zinc-50 py-12">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4">
         <header className="flex flex-col items-center gap-4 text-center">
-          <div className="space-y-1">
-            <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
-              Book Metadata
-            </p>
-            <p className="text-sm text-zinc-500">(Be Careful of Trademarks)</p>
-          </div>
+          <p className="text-base font-semibold uppercase tracking-[0.2em] text-zinc-700 sm:text-lg">
+            Hardcover PDF Resizer
+          </p>
           <div className="flex w-full flex-wrap justify-end gap-2">
             <Link
               href="/"
@@ -20,16 +17,16 @@ export default function MetadataPage() {
               Studio
             </Link>
             <Link
+              href="/metadata"
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+            >
+              Metadata
+            </Link>
+            <Link
               href="/compressor"
               className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
             >
               Compressor
-            </Link>
-            <Link
-              href="/hardcover-resizer"
-              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
-            >
-              Hardcover Resizer
             </Link>
             <Link
               href="/rmpdf"
@@ -45,7 +42,7 @@ export default function MetadataPage() {
             </Link>
           </div>
         </header>
-        <MetadataManager />
+        <HardcoverPdfResizer />
       </div>
     </main>
   );
