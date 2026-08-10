@@ -32,6 +32,12 @@ export default function MetadataPage() {
               Hardcover Resizer
             </Link>
             <Link
+              href="/ebook2pdf"
+              className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
+            >
+              ebook2pdf
+            </Link>
+            <Link
               href="/rmpdf"
               className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-semibold text-zinc-700 shadow-sm transition hover:border-zinc-400 hover:text-zinc-900"
             >

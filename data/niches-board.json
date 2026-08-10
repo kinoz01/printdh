@@ -1229,6 +1229,67 @@
       },
       "id": "e5dcba5c-7aef-446e-b226-59b96751be01",
       "createdAt": "2026-07-24T11:38:19.254Z"
+    },
+    {
+      "section": "searches",
+      "value": "https://www.amazon.com/s?k=tahiti+picture+book&crid=23RG895L6X6PM&sprefix=tapir+picture+book%2Caps%2C307&ref=nb_sb_ss_saint-en-refocus-candidate_2_18",
+      "preview": {
+        "url": "https://www.amazon.com/s?k=tahiti+picture+book&crid=23RG895L6X6PM&sprefix=tapir+picture+book%2Caps%2C307&ref=nb_sb_ss_saint-en-refocus-candidate_2_18",
+        "title": "Amazon search: tahiti picture book",
+        "siteName": "amazon.com"
+      },
+      "id": "3d517348-e9d0-448b-9c45-8383d0de73b0",
+      "createdAt": "2026-08-05T04:47:54.379Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Sandra-April/author/B0H1K1SXP8?ref=sr_ntt_srch_lnk_1&qid=1785975316&sr=8-1&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Sandra-April/author/B0H1K1SXP8?ref=sr_ntt_srch_lnk_1&qid=1785975316&sr=8-1&shoppingPortalEnabled=true",
+        "title": "Sandra April: books, biography, latest update",
+        "siteName": "amazon.com"
+      },
+      "id": "68e7c8eb-3dd4-40a5-a529-4e4655357730",
+      "createdAt": "2026-08-06T00:38:02.243Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Dina-Devine/author/B0B2MWRWNR?ref=dbs_mng_calw_a_0&qid=1786027381&sr=8-4&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Dina-Devine/author/B0B2MWRWNR?ref=dbs_mng_calw_a_0&qid=1786027381&sr=8-4&shoppingPortalEnabled=true",
+        "title": "Dina Devine: books, biography, latest update",
+        "description": "Follow Dina Devine and explore their bibliography from Amazon&#039;s Dina Devine Author Page.",
+        "image": "https://m.media-amazon.com/images/I/01Kv-W2ysOL.png",
+        "siteName": "Amazon.com"
+      },
+      "id": "2bfbb6b4-2548-4d88-b6d4-ad68e813a3b6",
+      "createdAt": "2026-08-06T14:44:53.359Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Jordan-Buell/author/B0CNL81JL5?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Jordan-Buell/author/B0CNL81JL5?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Jordan Buell: books, biography, latest update",
+        "description": "Follow Jordan Buell and explore their bibliography from Amazon&#039;s Jordan Buell Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/75vhf4b1ta9pe4ldc99nvu4g2d.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "85208500-20bd-4cc5-8e40-c74781b30ead",
+      "createdAt": "2026-08-06T20:20:15.461Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Marcia-Salles/author/B0GR6RX8JG?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Marcia-Salles/author/B0GR6RX8JG?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Marcia Salles: books, biography, latest update",
+        "description": "Follow Marcia Salles and explore their bibliography from Amazon&#039;s Marcia Salles Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/22atva62ckv2b1t17knjgu7542.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "339e8187-fc26-412b-b2ef-e9d599e7cc75",
+      "createdAt": "2026-08-08T00:34:58.415Z"
     }
   ]
 }

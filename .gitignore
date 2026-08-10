@@ -9,3 +9,7 @@ out/
 .env
 .env.local
 .env.*.local
+
+# local native tools
+tools/calibre/
+tools/calibre-libs/
