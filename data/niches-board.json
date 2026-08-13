@@ -1290,6 +1290,36 @@
       },
       "id": "339e8187-fc26-412b-b2ef-e9d599e7cc75",
       "createdAt": "2026-08-08T00:34:58.415Z"
+    },
+    {
+      "section": "ideas",
+      "value": "Alzheimer's Patients, dementia, seniors\npicture book for Alzheimer patients\nDementia Picture Book for Seniors",
+      "id": "b00722d9-a695-4929-b135-38d0cd547a26",
+      "createdAt": "2026-08-11T18:06:45.861Z"
+    },
+    {
+      "section": "searches",
+      "value": "https://www.amazon.com/s?i=stripbooks&rh=p_27%3ATH%2BSunflower&s=relevancerank&text=TH+Sunflower&ref=dp_byline_sr_book_1",
+      "preview": {
+        "url": "https://www.amazon.com/s?i=stripbooks&rh=p_27%3ATH%2BSunflower&s=relevancerank&text=TH+Sunflower&ref=dp_byline_sr_book_1",
+        "title": "Amazon search: Amazon.com",
+        "siteName": "amazon.com"
+      },
+      "id": "26a77326-d372-4dd6-9d12-d7e96aa4a6b6",
+      "createdAt": "2026-08-11T22:33:43.304Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Penelope-Palette/author/B0BSFWCQF6?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Penelope-Palette/author/B0BSFWCQF6?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Penelope Palette: books, biography, latest update",
+        "description": "Follow Penelope Palette and explore their bibliography from Amazon&#039;s Penelope Palette Author Page.",
+        "image": "https://m.media-amazon.com/images/I/51RCXit3NuL._SL200_._PQ50_._FMwebp__.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "1aa3bfc0-ba30-41f9-9860-966b46da8178",
+      "createdAt": "2026-08-12T22:10:34.709Z"
     }
   ]
 }
