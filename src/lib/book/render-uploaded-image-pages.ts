@@ -26,6 +26,7 @@ export interface RenderUploadedImagePagesOptions {
   fineTuneBackgrounds?: boolean;
   backgroundlessContentImageIndexes?: number[];
   stretchContentImages?: boolean;
+  cropBackgroundlessContentImages?: boolean;
   imageFrameEnabled?: boolean;
   imageFrameThickness?: number;
   showPageNumbers?: boolean;
@@ -45,6 +46,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     fineTuneBackgrounds = false,
     backgroundlessContentImageIndexes = [],
     stretchContentImages = false,
+    cropBackgroundlessContentImages = false,
     imageFrameEnabled = false,
     imageFrameThickness = 0,
     showPageNumbers = false,
@@ -88,7 +90,15 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     }
 
     let contentBounds: ImageBounds;
-    if (stretchContentImages || isBackgroundlessContent) {
+    if (isBackgroundlessContent && cropBackgroundlessContentImages) {
+      contentBounds = drawCroppedImage(
+        page,
+        contentImages[contentIndex],
+        contentImageAssets[contentIndex],
+        pageWidth,
+        pageHeight
+      );
+    } else if (stretchContentImages || isBackgroundlessContent) {
       contentBounds = drawStretchedImage(page, contentImages[contentIndex], pageWidth, pageHeight);
     } else {
       contentBounds = drawContainedImage(
@@ -149,6 +159,22 @@ function drawStretchedImage(page: PDFPage, image: PDFImage, pageWidth: number, p
     width: pageWidth,
     height: pageHeight,
   });
+  return { x: 0, y: 0, width: pageWidth, height: pageHeight };
+}
+
+function drawCroppedImage(
+  page: PDFPage,
+  image: PDFImage,
+  assetMeta: { width: number; height: number },
+  pageWidth: number,
+  pageHeight: number
+): ImageBounds {
+  const scale = Math.max(pageWidth / assetMeta.width, pageHeight / assetMeta.height);
+  const width = assetMeta.width * scale;
+  const height = assetMeta.height * scale;
+  const x = (pageWidth - width) / 2;
+  const y = (pageHeight - height) / 2;
+  page.drawImage(image, { x, y, width, height });
   return { x: 0, y: 0, width: pageWidth, height: pageHeight };
 }
 

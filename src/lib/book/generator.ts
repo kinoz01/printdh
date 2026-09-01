@@ -48,6 +48,7 @@ export interface GenerateBookPayload {
   fineTuneBackgrounds?: boolean;
   backgroundlessContentImageIndexes?: number[];
   stretchContentImages?: boolean;
+  cropBackgroundlessContentImages?: boolean;
   imageFrameEnabled?: boolean;
   imageFrameThickness?: number;
   showPageNumbers?: boolean;
@@ -361,6 +362,7 @@ export async function generateBook(payload: GenerateBookPayload) {
         fineTuneBackgrounds: payload.fineTuneBackgrounds,
         backgroundlessContentImageIndexes: payload.backgroundlessContentImageIndexes,
         stretchContentImages: payload.stretchContentImages,
+        cropBackgroundlessContentImages: payload.cropBackgroundlessContentImages,
         imageFrameEnabled: payload.imageFrameEnabled,
         imageFrameThickness: payload.imageFrameThickness,
         showPageNumbers: payload.showPageNumbers,

@@ -54,6 +54,7 @@ const schema = z.object({
   fineTuneBackgrounds: z.boolean().optional(),
   backgroundlessContentImageIndexes: z.array(z.number().int().min(0)).optional(),
   stretchContentImages: z.boolean().optional(),
+  cropBackgroundlessContentImages: z.boolean().optional(),
   imageFrameEnabled: z.boolean().optional(),
   imageFrameThickness: z.number().min(0).optional(),
   showPageNumbers: z.boolean().optional(),
@@ -62,7 +63,12 @@ const schema = z.object({
   pageCount: z.number().int().min(1).max(200).optional(),
 });
 
-class RequestParseError extends Error {}
+class RequestParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RequestParseError";
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,10 +102,12 @@ export async function POST(request: NextRequest) {
       console.warn("PDF generation upload was interrupted by the browser.");
       return NextResponse.json({ error: "The upload connection was interrupted. Please try again." }, { status: 499 });
     }
+    if (error instanceof z.ZodError || error instanceof RequestParseError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Failed to generate book", error);
     const message = error instanceof Error ? error.message : "Unknown error";
-    const status = error instanceof z.ZodError || error instanceof RequestParseError ? 400 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
@@ -110,7 +118,7 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
   uploadedPdfs: PdfAsset[];
 }> {
   const contentType = request.headers.get("content-type") || "";
-  if (!contentType.includes("multipart/form-data")) {
+  if (!isMultipartFormDataContentType(contentType)) {
     const body = await request.json();
     return {
       payload: schema.parse(body),
@@ -120,7 +128,11 @@ async function parseGenerateRequest(request: NextRequest): Promise<{
     };
   }
 
-  const formData = await request.formData();
+  if (!hasMultipartBoundary(contentType)) {
+    throw new RequestParseError("Invalid multipart upload.");
+  }
+
+  const formData = await readMultipartFormData(request);
   const payloadValue = formData.get("payload");
   if (typeof payloadValue !== "string") {
     throw new RequestParseError("Missing payload");
@@ -166,9 +178,37 @@ async function readProvidedPdfs(formData: FormData, fieldName: string): Promise<
   );
 }
 
+async function readMultipartFormData(request: NextRequest) {
+  try {
+    return await request.formData();
+  } catch (error) {
+    if (isConnectionReset(error)) {
+      throw error;
+    }
+    const contentLength = Number(request.headers.get("content-length") || "0");
+    const hasBody = Number.isFinite(contentLength) && contentLength > 0;
+    const message = hasBody
+      ? "Unable to read the uploaded files. Please try again, or remove and re-add the files before generating."
+      : "Missing multipart request body.";
+    throw new RequestParseError(message);
+  }
+}
+
+function isMultipartFormDataContentType(contentType: string) {
+  return contentType.toLowerCase().includes("multipart/form-data");
+}
+
+function hasMultipartBoundary(contentType: string) {
+  return /(?:^|;)\s*boundary=/i.test(contentType);
+}
+
 function isConnectionReset(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
   }
-  return error.message === "aborted" || ("code" in error && error.code === "ECONNRESET");
+  return (
+    error.message === "aborted" ||
+    error.message === "Request aborted" ||
+    ("code" in error && error.code === "ECONNRESET")
+  );
 }

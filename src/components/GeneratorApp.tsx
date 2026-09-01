@@ -4,7 +4,16 @@
 
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from "react";
 import { importBrowserFontFile, listBrowserFonts } from "@/lib/book/browser-font-library";
 import {
   DEFAULT_NUMBER_BADGE_COLOR,
@@ -845,6 +854,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     useState<UploadedPageNumberPosition>("alternating");
   const [uploadedContentPadding, setUploadedContentPadding] = useState(0.32);
   const [uploadedStretchContentImages, setUploadedStretchContentImages] = useState(false);
+  const [uploadedCropBackgroundlessContentImages, setUploadedCropBackgroundlessContentImages] = useState(false);
   const [uploadedImageFrameEnabled, setUploadedImageFrameEnabled] = useState(false);
   const [uploadedImageFrameThickness, setUploadedImageFrameThickness] = useState(0.05);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
@@ -1749,6 +1759,20 @@ export function GeneratorApp(props: GeneratorAppProps) {
     );
   }, []);
 
+  const moveUploadedContentFile = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      const normalizedMove = normalizeArrayMove(uploadedContentFiles.length, fromIndex, toIndex);
+      if (!normalizedMove) {
+        return;
+      }
+      setUploadedContentFiles((current) => moveArrayItem(current, normalizedMove.fromIndex, normalizedMove.toIndex));
+      setUploadedBackgroundlessContentImageIndexes((current) =>
+        remapSelectedIndexesForMove(current, normalizedMove.fromIndex, normalizedMove.toIndex)
+      );
+    },
+    [uploadedContentFiles.length]
+  );
+
   const removeUploadedPdfFile = useCallback(
     (index: number) => {
       const removedPageStart = uploadedPdfPageCounts
@@ -1851,6 +1875,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
         const safeUploadedImageFrameThickness = Number.isFinite(uploadedImageFrameThickness)
           ? uploadedImageFrameThickness
           : 0.05;
+        base.cropBackgroundlessContentImages = uploadedCropBackgroundlessContentImages;
         base.imageFrameEnabled = uploadedImageFrameEnabled;
         base.imageFrameThickness = uploadedImageFrameEnabled ? Math.max(0, safeUploadedImageFrameThickness) * 72 : 0;
       }
@@ -1918,6 +1943,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
     currentOpacity,
     uploadedContentPadding,
     uploadedBackgroundlessContentImageIndexes,
+    uploadedCropBackgroundlessContentImages,
     uploadedFineTuneBackgrounds,
     uploadedPageNumberPosition,
     uploadedImageFrameEnabled,
@@ -2197,7 +2223,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
               ) : null}
             </div>
           </div>
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div
+            className={
+              isUploadedImagesMode
+                ? "grid gap-4 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
+                : "grid gap-4 lg:grid-cols-2"
+            }
+          >
             <div className="space-y-3">
               <UploadedImagePicker
                 inputId="background-upload"
@@ -2270,6 +2302,22 @@ export function GeneratorApp(props: GeneratorAppProps) {
                       );
                     })}
                   </div>
+                  {isUploadedImagesMode ? (
+                    <label className="flex items-center justify-between gap-4 rounded-lg border border-zinc-200 bg-white p-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-semibold text-zinc-900">Crop no-background images</span>
+                        <span className="block text-xs text-zinc-600">
+                          Fill the full page without distortion by center-cropping selected content images.
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={uploadedCropBackgroundlessContentImages}
+                        onChange={(event) => setUploadedCropBackgroundlessContentImages(event.target.checked)}
+                        className="h-5 w-5 shrink-0 accent-black"
+                      />
+                    </label>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -2315,6 +2363,8 @@ export function GeneratorApp(props: GeneratorAppProps) {
                 onFilesSelected={handleUploadedContentFiles}
                 onAddFiles={addUploadedContentFiles}
                 onRemoveFile={removeUploadedContentFile}
+                onMoveFile={moveUploadedContentFile}
+                positionLabel="Page"
                 onClear={clearUploadedContentFiles}
                 selectableIndexes={
                   uploadedFineTuneBackgrounds
@@ -3509,6 +3559,8 @@ interface UploadedImagePickerProps {
   onFilesSelected: (event: ChangeEvent<HTMLInputElement>) => void;
   onAddFiles: (files: FileList | File[] | null | undefined) => void;
   onRemoveFile: (index: number) => void;
+  onMoveFile?: (fromIndex: number, toIndex: number) => void;
+  positionLabel?: string;
   onClear: () => void;
   selectableIndexes?: {
     selected: number[];
@@ -3524,10 +3576,15 @@ function UploadedImagePicker({
   onFilesSelected,
   onAddFiles,
   onRemoveFile,
+  onMoveFile,
+  positionLabel = "Position",
   onClear,
   selectableIndexes,
 }: UploadedImagePickerProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [draggingFileIndex, setDraggingFileIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const canReorder = Boolean(onMoveFile) && files.length > 1;
 
   const handleDragEnter = useCallback((event: DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
@@ -3553,6 +3610,55 @@ function UploadedImagePicker({
     },
     [onAddFiles]
   );
+
+  const handleFileDragStart = useCallback(
+    (event: DragEvent<HTMLElement>, index: number) => {
+      if (!canReorder) {
+        event.preventDefault();
+        return;
+      }
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", String(index));
+      setDraggingFileIndex(index);
+      setDropIndex(index);
+    },
+    [canReorder]
+  );
+
+  const handleFileDragOver = useCallback(
+    (event: DragEvent<HTMLLIElement>, index: number) => {
+      if (draggingFileIndex === null || !onMoveFile) {
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setDropIndex(getUploadDropIndex(event, index));
+    },
+    [draggingFileIndex, onMoveFile]
+  );
+
+  const handleFileDrop = useCallback(
+    (event: DragEvent<HTMLLIElement>) => {
+      event.preventDefault();
+      const sourceIndex = draggingFileIndex;
+      const targetIndex =
+        sourceIndex === null || dropIndex === null
+          ? null
+          : getArrayMoveTargetIndex(sourceIndex, dropIndex, files.length);
+      setDraggingFileIndex(null);
+      setDropIndex(null);
+      if (sourceIndex === null || targetIndex === null || !onMoveFile) {
+        return;
+      }
+      onMoveFile(sourceIndex, targetIndex);
+    },
+    [draggingFileIndex, dropIndex, files.length, onMoveFile]
+  );
+
+  const handleFileDragEnd = useCallback(() => {
+    setDraggingFileIndex(null);
+    setDropIndex(null);
+  }, []);
 
   return (
     <div className="min-w-0 space-y-3 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
@@ -3594,43 +3700,211 @@ function UploadedImagePicker({
       />
       {files.length > 0 ? (
         <ol className="grid min-w-0 gap-2">
-          {files.map((file, index) => (
-            <li
-              key={`${file.name}-${file.lastModified}-${index}`}
-              className="grid min-w-0 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2"
-            >
-              <UploadedFileThumbnail file={file} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium text-zinc-900">
-                  {index + 1}. {file.name}
-                </p>
-                <p className="text-xs text-zinc-500">{formatFileSize(file.size)}</p>
-                {selectableIndexes ? (
-                  <label className="mt-2 flex w-fit items-center gap-2 text-xs font-medium text-zinc-700">
-                    <input
-                      type="checkbox"
-                      checked={selectableIndexes.selected.includes(index)}
-                      onChange={() => selectableIndexes.onToggle(index)}
-                      className="h-4 w-4 accent-black"
-                    />
-                    No background
-                  </label>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => onRemoveFile(index)}
-                className="shrink-0 rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+          {files.map((file, index) => {
+            const isDraggingFile = draggingFileIndex === index;
+            const showTopDropMarker =
+              canReorder && dropIndex === index && !isNeutralDropIndex(draggingFileIndex, dropIndex);
+            return (
+              <li
+                key={`${file.name}-${file.lastModified}-${index}`}
+                onDragOver={(event) => handleFileDragOver(event, index)}
+                onDrop={handleFileDrop}
+                className={`relative grid min-w-0 items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2 transition ${
+                  canReorder
+                    ? "grid-cols-[2rem_3.5rem_minmax(0,1fr)]"
+                    : "grid-cols-[3.5rem_minmax(0,1fr)]"
+                } ${isDraggingFile ? "opacity-45" : ""}`}
               >
-                Remove
-              </button>
+                {showTopDropMarker ? (
+                  <div aria-hidden="true" className="pointer-events-none absolute inset-x-2 -top-1">
+                    <div className="h-1 rounded-full bg-zinc-900 shadow-sm" />
+                  </div>
+                ) : null}
+                {canReorder ? (
+                  <span
+                    draggable
+                    onDragStart={(event) => handleFileDragStart(event, index)}
+                    onDragEnd={handleFileDragEnd}
+                    title="Drag to reorder"
+                    aria-hidden="true"
+                    className="flex h-10 w-8 cursor-grab items-center justify-center rounded-md border border-dashed border-zinc-300 bg-zinc-50 text-zinc-500 transition hover:border-zinc-500 active:cursor-grabbing"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      viewBox="0 0 20 20"
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    >
+                      <path d="M4 6.5h12" />
+                      <path d="M4 10h12" />
+                      <path d="M4 13.5h12" />
+                    </svg>
+                  </span>
+                ) : null}
+                <UploadedFileThumbnail file={file} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-zinc-900">
+                    {index + 1}. {file.name}
+                  </p>
+                  <p className="text-xs text-zinc-500">{formatFileSize(file.size)}</p>
+                  {selectableIndexes ? (
+                    <label className="mt-2 flex w-fit items-center gap-2 text-xs font-medium text-zinc-700">
+                      <input
+                        type="checkbox"
+                        checked={selectableIndexes.selected.includes(index)}
+                        onChange={() => selectableIndexes.onToggle(index)}
+                        className="h-4 w-4 accent-black"
+                      />
+                      No background
+                    </label>
+                  ) : null}
+                </div>
+                <div className="col-span-full flex shrink-0 flex-wrap items-center justify-end gap-1">
+                  {canReorder ? (
+                    <>
+                      <UploadPositionInput
+                        fileName={file.name}
+                        label={positionLabel}
+                        max={files.length}
+                        position={index + 1}
+                        onCommit={(position) => onMoveFile?.(index, position - 1)}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onMoveFile?.(index, index - 1)}
+                        disabled={index === 0}
+                        aria-label={`Move ${file.name} up`}
+                        title="Move up"
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-300 text-zinc-700 transition hover:border-zinc-500 disabled:opacity-40"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m5 12 5-5 5 5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMoveFile?.(index, index + 1)}
+                        disabled={index === files.length - 1}
+                        aria-label={`Move ${file.name} down`}
+                        title="Move down"
+                        className="flex h-8 w-8 items-center justify-center rounded-md border border-zinc-300 text-zinc-700 transition hover:border-zinc-500 disabled:opacity-40"
+                      >
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="m5 8 5 5 5-5" />
+                        </svg>
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => onRemoveFile(index)}
+                    className="shrink-0 rounded-md border border-zinc-300 px-3 py-1 text-xs font-semibold text-zinc-700 transition hover:border-zinc-500"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+          {canReorder && dropIndex === files.length && draggingFileIndex !== null && draggingFileIndex !== files.length - 1 ? (
+            <li aria-hidden="true" className="list-none px-2">
+              <div className="h-1 rounded-full bg-zinc-900 shadow-sm" />
             </li>
-          ))}
+          ) : null}
         </ol>
       ) : (
         <p className="text-sm text-zinc-500">No images selected.</p>
       )}
     </div>
+  );
+}
+
+function UploadPositionInput({
+  fileName,
+  label,
+  max,
+  position,
+  onCommit,
+}: {
+  fileName: string;
+  label: string;
+  max: number;
+  position: number;
+  onCommit: (position: number) => void;
+}) {
+  const [draftPosition, setDraftPosition] = useState(String(position));
+
+  useEffect(() => {
+    setDraftPosition(String(position));
+  }, [position]);
+
+  const commitPosition = useCallback(() => {
+    const parsedPosition = Number(draftPosition);
+    if (!Number.isFinite(parsedPosition)) {
+      setDraftPosition(String(position));
+      return;
+    }
+    const nextPosition = Math.max(1, Math.min(max, Math.trunc(parsedPosition)));
+    setDraftPosition(String(nextPosition));
+    if (nextPosition !== position) {
+      onCommit(nextPosition);
+    }
+  }, [draftPosition, max, onCommit, position]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === "Enter") {
+        event.currentTarget.blur();
+        return;
+      }
+      if (event.key === "Escape") {
+        setDraftPosition(String(position));
+        event.currentTarget.blur();
+      }
+    },
+    [position]
+  );
+
+  return (
+    <label className="flex h-8 items-center gap-1 rounded-md border border-zinc-300 px-2 text-xs font-semibold text-zinc-700">
+      <span aria-hidden="true" className="text-zinc-500">
+        {label}
+      </span>
+      <span className="sr-only">{label} position for {fileName}</span>
+      <input
+        type="number"
+        min={1}
+        max={max}
+        step={1}
+        value={draftPosition}
+        onChange={(event) => setDraftPosition(event.target.value)}
+        onBlur={commitPosition}
+        onKeyDown={handleKeyDown}
+        aria-label={`${label} position for ${fileName}`}
+        className="h-6 w-12 rounded border border-zinc-200 px-1 text-center text-xs font-semibold text-zinc-900 focus:border-black focus:outline-none"
+      />
+    </label>
   );
 }
 
@@ -4054,6 +4328,65 @@ function appendUploadFiles(current: File[], files: FileList | File[] | null | un
     return current;
   }
   return [...current, ...nextFiles];
+}
+
+function getUploadDropIndex(event: DragEvent<HTMLElement>, index: number) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY < rect.top + rect.height / 2 ? index : index + 1;
+}
+
+function getArrayMoveTargetIndex(fromIndex: number, dropIndex: number, itemCount: number) {
+  if (fromIndex < 0 || fromIndex >= itemCount) {
+    return null;
+  }
+  const boundedDropIndex = Math.max(0, Math.min(dropIndex, itemCount));
+  const toIndex = boundedDropIndex > fromIndex ? boundedDropIndex - 1 : boundedDropIndex;
+  return normalizeArrayMove(itemCount, fromIndex, toIndex)?.toIndex ?? null;
+}
+
+function isNeutralDropIndex(fromIndex: number | null, dropIndex: number | null) {
+  return fromIndex === null || dropIndex === null || dropIndex === fromIndex || dropIndex === fromIndex + 1;
+}
+
+function normalizeArrayMove(itemCount: number, fromIndex: number, toIndex: number) {
+  if (itemCount <= 1 || fromIndex < 0 || fromIndex >= itemCount) {
+    return null;
+  }
+  const boundedToIndex = Math.max(0, Math.min(toIndex, itemCount - 1));
+  if (boundedToIndex === fromIndex) {
+    return null;
+  }
+  return {
+    fromIndex,
+    toIndex: boundedToIndex,
+  };
+}
+
+function moveArrayItem<T>(items: T[], fromIndex: number, toIndex: number) {
+  const normalizedMove = normalizeArrayMove(items.length, fromIndex, toIndex);
+  if (!normalizedMove) {
+    return items;
+  }
+  const nextItems = [...items];
+  const [movingItem] = nextItems.splice(normalizedMove.fromIndex, 1);
+  nextItems.splice(normalizedMove.toIndex, 0, movingItem);
+  return nextItems;
+}
+
+function remapSelectedIndexesForMove(selectedIndexes: number[], fromIndex: number, toIndex: number) {
+  const remapped = selectedIndexes.map((selectedIndex) => {
+    if (selectedIndex === fromIndex) {
+      return toIndex;
+    }
+    if (fromIndex < toIndex && selectedIndex > fromIndex && selectedIndex <= toIndex) {
+      return selectedIndex - 1;
+    }
+    if (fromIndex > toIndex && selectedIndex >= toIndex && selectedIndex < fromIndex) {
+      return selectedIndex + 1;
+    }
+    return selectedIndex;
+  });
+  return Array.from(new Set(remapped)).sort((left, right) => left - right);
 }
 
 function isUploadImageFile(file: File) {
