@@ -1470,6 +1470,69 @@
       },
       "id": "26ddcc7e-d41a-483f-b334-ad17d319f7f9",
       "createdAt": "2026-08-31T13:30:33.642Z"
+    },
+    {
+      "section": "searches",
+      "value": "https://www.amazon.com/s?k=nutrition+workbook+for+kids&crid=D3FN9O4TY4TZ&sprefix=nutrition+workbook+for+kids%2Caps%2C919&ref=nb_sb_ss_p13n-expert-pd-ops-ranker_1_27",
+      "preview": {
+        "url": "https://www.amazon.com/s?k=nutrition+workbook+for+kids&crid=D3FN9O4TY4TZ&sprefix=nutrition+workbook+for+kids%2Caps%2C919&ref=nb_sb_ss_p13n-expert-pd-ops-ranker_1_27",
+        "title": "Amazon search: nutrition workbook for kids",
+        "siteName": "amazon.com"
+      },
+      "id": "8ad509e6-a4c7-45ad-82b8-f92cfacdb505",
+      "createdAt": "2026-09-05T05:48:36.966Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Salvera-Studio/author/B0FQVWBT48?ref=sr_ntt_srch_lnk_1&qid=1788587022&sr=8-1&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Salvera-Studio/author/B0FQVWBT48?ref=sr_ntt_srch_lnk_1&qid=1788587022&sr=8-1&shoppingPortalEnabled=true",
+        "title": "Salvera Studio: books, biography, latest update",
+        "description": "Follow Salvera Studio and explore their bibliography from Amazon&#039;s Salvera Studio Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/67u8o3i1doj2p0onj76di9djvm.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "091e3e19-6e4a-4b23-a19e-193fe0e73e8c",
+      "createdAt": "2026-09-05T05:48:50.662Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Little-Learners-Studio/author/B0GPT7PBF1?ref=sr_ntt_srch_lnk_10&qid=1789019591&sr=8-10&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Little-Learners-Studio/author/B0GPT7PBF1?ref=sr_ntt_srch_lnk_10&qid=1789019591&sr=8-10&shoppingPortalEnabled=true",
+        "title": "Little Learners Studio: books, biography, latest update",
+        "description": "Follow Little Learners Studio and explore their bibliography from Amazon&#039;s Little Learners Studio Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/4abgg7dsb3rg82urvj1c5nhhtg.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "dbbb4e89-9e6c-4c98-b4bc-1c3d1be75bee",
+      "createdAt": "2026-09-10T05:55:20.321Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B0DGGWG9MG/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=6LNbw&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=kXl6v&pd_rd_r=b517e548-00f4-490e-a1f7-4effb7649cb7&ccs_id=ec9942be-2ac6-436c-abbc-ab86d00b6780",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B0DGGWG9MG/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=6LNbw&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=kXl6v&pd_rd_r=b517e548-00f4-490e-a1f7-4effb7649cb7&ccs_id=ec9942be-2ac6-436c-abbc-ab86d00b6780",
+        "title": "Lisa Fink: books, biography, latest update",
+        "description": "Follow Lisa Fink and explore their bibliography from Amazon&#039;s Lisa Fink Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/n3015c27ss7i9qjfh79ras7rf7.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "6c1d92ca-5c7f-444c-9d51-099eeafa1db3",
+      "createdAt": "2026-09-22T17:38:22.644Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B0BHQQ5M55/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=YKXez&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=uF1No&pd_rd_r=216f8a6a-40d7-46d2-a5ba-f7ae3fe10b8c&ccs_id=89a9f85f-e62c-4047-a178-3669950420b1",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B0BHQQ5M55/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=YKXez&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=uF1No&pd_rd_r=216f8a6a-40d7-46d2-a5ba-f7ae3fe10b8c&ccs_id=89a9f85f-e62c-4047-a178-3669950420b1",
+        "title": "BOOKSGEEK: books, biography, latest update",
+        "description": "Follow BOOKSGEEK and explore their bibliography from Amazon&#039;s BOOKSGEEK Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/33q8rtr7sbikhm24utl7pm4g3q.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "ee4b2ccd-e5f4-4862-82c3-3130fa91029e",
+      "createdAt": "2026-09-22T19:07:06.521Z"
     }
   ]
 }
