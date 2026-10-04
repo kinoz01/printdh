@@ -154,7 +154,8 @@ export function PdfMetadataRemover() {
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-zinc-900">Remove PDF metadata</h2>
         <p className="text-sm text-zinc-700">
-          Rebuild a PDF and strip document info, XMP metadata, IDs, actions, attachments, forms, and annotations.
+          Rebuild a PDF and strip original document info, XMP metadata, IDs, actions, attachments, forms, and annotations.
+          Output uses generic PDF Creator metadata and fresh creation/modification dates.
         </p>
       </div>
 

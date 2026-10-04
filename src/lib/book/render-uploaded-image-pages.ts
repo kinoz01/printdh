@@ -1,4 +1,5 @@
 import { PDFFont, PDFDocument, PDFImage, PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { PAGE_HEIGHT, PAGE_WIDTH, POINTS_PER_INCH, TOTAL_PAGES } from "./constants";
 import type { ImageAsset } from "./types";
 
@@ -120,7 +121,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     }
   }
 
-  return pdf.save();
+  return savePdfWithGenericMetadata(pdf);
 }
 
 function drawWhiteBackground(page: PDFPage, pageWidth: number, pageHeight: number) {

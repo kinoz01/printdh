@@ -4413,6 +4413,7 @@ async function countPdfPages(file: File) {
 
 async function mergePdfPair(pdfOneFile: File, pdfTwoFile: File, orderMode: MergePdfOrderMode) {
   const { PDFDocument } = await import("pdf-lib");
+  const { savePdfWithGenericMetadata } = await import("@/lib/pdf-metadata");
   const [pdfOneBytes, pdfTwoBytes] = await Promise.all([pdfOneFile.arrayBuffer(), pdfTwoFile.arrayBuffer()]);
   const [pdfOne, pdfTwo] = await Promise.all([
     PDFDocument.load(pdfOneBytes, { ignoreEncryption: true }),
@@ -4431,7 +4432,7 @@ async function mergePdfPair(pdfOneFile: File, pdfTwoFile: File, orderMode: Merge
     mergedPdf.addPage(item.source === "one" ? pdfOnePages[item.pageIndex] : pdfTwoPages[item.pageIndex]);
   }
 
-  return mergedPdf.save();
+  return savePdfWithGenericMetadata(mergedPdf);
 }
 
 function buildPdfPairMergeOrder(

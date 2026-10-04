@@ -1,4 +1,5 @@
 import { PDFFont, PDFDocument, PDFEmbeddedPage, PDFImage, PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { PAGE_HEIGHT, PAGE_WIDTH, POINTS_PER_INCH } from "./constants";
 import type { ImageAsset, PdfAsset } from "./types";
 
@@ -93,7 +94,7 @@ export async function renderUploadedPdfPages(options: RenderUploadedPdfPagesOpti
     }
   }
 
-  return pdf.save();
+  return savePdfWithGenericMetadata(pdf);
 }
 
 async function embedPdfContentPages(pdf: PDFDocument, assets: PdfAsset[]) {

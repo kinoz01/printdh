@@ -1,4 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
+import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import { DEFAULT_IMAGE_LIBRARY, PAGE_HEIGHT, PAGE_WIDTH, TOTAL_PAGES } from "./constants";
 import { createOverlayConfig } from "./overlay-config";
@@ -145,7 +146,7 @@ export async function renderBook(options: RenderBookOptions): Promise<Uint8Array
     }
   }
 
-  return pdf.save();
+  return savePdfWithGenericMetadata(pdf);
 }
 
 function countOverlays(config: OverlayConfig, totalPages: number, skipOverlayPages: Set<number>) {

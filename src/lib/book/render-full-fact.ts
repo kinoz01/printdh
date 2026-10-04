@@ -1,4 +1,5 @@
 import fontkit from "@pdf-lib/fontkit";
+import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { PDFFont, PDFDocument, PDFImage, PDFPage } from "pdf-lib";
 import {
   DEFAULT_IMAGE_LIBRARY,
@@ -138,7 +139,7 @@ export async function renderFullFactBook(options: FullFactOptions) {
     }
   }
 
-  return pdf.save();
+  return savePdfWithGenericMetadata(pdf);
 }
 
 function padEntries(entries: TextEntry[], required: number, placeholder: string) {

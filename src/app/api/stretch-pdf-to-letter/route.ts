@@ -7,6 +7,7 @@ import {
   type PDFPage,
 } from "pdf-lib";
 import { NextRequest, NextResponse } from "next/server";
+import { savePdfWithGenericMetadata } from "@/lib/pdf-metadata";
 
 const POINTS_PER_INCH = 72;
 const TARGET_WIDTH_IN = 8.625;
@@ -125,11 +126,7 @@ export async function POST(request: NextRequest) {
       stretchPageToTarget(sourcePage);
     }
 
-    sourcePdf.setTitle(`Stretched to ${TARGET_WIDTH_IN}x${TARGET_HEIGHT_IN} in`);
-    sourcePdf.setCreator("printdh");
-    sourcePdf.setProducer("printdh");
-
-    const outputBytes = await sourcePdf.save({
+    const outputBytes = await savePdfWithGenericMetadata(sourcePdf, {
       updateFieldAppearances: false,
       useObjectStreams: true,
     });

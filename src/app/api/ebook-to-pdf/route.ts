@@ -4,6 +4,7 @@ import os from "os";
 import path from "path";
 import { NextRequest, NextResponse } from "next/server";
 import { MissingChromeError, convertEpubToPdfWithChrome } from "@/lib/ebook/epub-to-pdf";
+import { normalizePdfMetadata } from "@/lib/pdf-metadata";
 
 const MAX_EBOOK_SIZE_MB = 300;
 const MAX_EBOOK_SIZE_BYTES = MAX_EBOOK_SIZE_MB * 1024 * 1024;
@@ -265,7 +266,8 @@ export async function POST(request: NextRequest) {
     }
 
     const downloadName = `${toSafeBasename(filename)}.pdf`;
-    return new NextResponse(toResponseArrayBuffer(outputBytes), {
+    const normalizedBytes = await normalizePdfMetadata(outputBytes);
+    return new NextResponse(toResponseArrayBuffer(normalizedBytes), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

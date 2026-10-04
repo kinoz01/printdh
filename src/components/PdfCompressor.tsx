@@ -9,7 +9,7 @@ import {
   type DragEvent as ReactDragEvent,
 } from "react";
 
-type QualityPreset = "printer" | "prepress" | "ebook" | "screen";
+type QualityPreset = "high-res-300" | "printer" | "prepress" | "ebook" | "screen";
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -36,7 +36,7 @@ function isPdfFile(file: File) {
 
 export function PdfCompressor() {
   const [file, setFile] = useState<File | null>(null);
-  const [quality, setQuality] = useState<QualityPreset>("printer");
+  const [quality, setQuality] = useState<QualityPreset>("high-res-300");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState<{ original: number; compressed: number } | null>(null);
@@ -147,7 +147,7 @@ export function PdfCompressor() {
     <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col gap-2">
         <h2 className="text-lg font-semibold text-zinc-900">Compress a PDF for printing</h2>
-        <p className="text-sm text-zinc-700">Upload a PDF and download a smaller, print-friendly copy.</p>
+        <p className="text-sm text-zinc-700">Upload a PDF and download an optimized, print-friendly copy.</p>
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
@@ -197,12 +197,17 @@ export function PdfCompressor() {
             onChange={(event) => setQuality(event.target.value as QualityPreset)}
             className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
           >
-            <option value="printer">Printer (recommended)</option>
+            <option value="high-res-300">High res 300dpi (default)</option>
+            <option value="printer">Printer</option>
             <option value="prepress">Prepress (highest quality)</option>
             <option value="ebook">eBook (smaller)</option>
             <option value="screen">Screen (smallest)</option>
           </select>
-          <span className="text-xs text-zinc-600">Tip: start with Printer; use Prepress for art books.</span>
+          <span className="text-xs text-zinc-600">
+            {quality === "high-res-300"
+              ? "Preserves source image resolution for 300 DPI or higher printing, without downsampling. Images already below 300 DPI stay below 300 DPI. Files may be larger than other presets."
+              : "Use High res 300dpi to preserve image resolution; eBook and Screen trade print quality for smaller files."}
+          </span>
         </label>
       </div>
 

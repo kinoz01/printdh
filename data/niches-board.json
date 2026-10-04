@@ -1539,6 +1539,30 @@
       "value": "https://www.teacherspayteachers.com/store/tpt-wanwan",
       "id": "73ae2a41-d5fd-4655-a7ad-ac489828df66",
       "createdAt": "2026-09-24T05:31:35.738Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B0DJCJHPF4/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=1s8y1&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=VRv02&pd_rd_r=fb730ab2-222e-421f-947e-0e4c3b97ef9b&ccs_id=328d3ea7-9f2e-4bf2-b907-09186143b8d7",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B0DJCJHPF4/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=1s8y1&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=146-1238180-9988242&pd_rd_wg=VRv02&pd_rd_r=fb730ab2-222e-421f-947e-0e4c3b97ef9b&ccs_id=328d3ea7-9f2e-4bf2-b907-09186143b8d7",
+        "title": "C Lagarde: books, biography, latest update",
+        "siteName": "amazon.com"
+      },
+      "id": "780b7966-f98e-47b5-bf3b-77f29fbef068",
+      "createdAt": "2026-09-29T05:44:29.749Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/author/B089J5F9DJ/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=ICje3&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=135-8841571-1604510&pd_rd_wg=0WJNt&pd_rd_r=f726569f-8d5f-461a-9e9c-3ac3304e611c",
+      "preview": {
+        "url": "https://www.amazon.com/stores/author/B089J5F9DJ/allbooks?_encoding=UTF8&ref_=aufs_ap_ahdr_dsk_ab&pd_rd_w=ICje3&content-id=amzn1.sym.7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_p=7e190e19-9f6f-4df8-807a-5a7608594741&pf_rd_r=135-8841571-1604510&pd_rd_wg=0WJNt&pd_rd_r=f726569f-8d5f-461a-9e9c-3ac3304e611c",
+        "title": "The Life Graduate Publishing Group: books, biography, latest update",
+        "description": "Follow The Life Graduate Publishing Group and explore their bibliography from Amazon&#039;s The Life Graduate Publishing Group Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/cijtavtob1vlqvootr2rn2hqaf.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "2317fefa-56ea-4554-9536-adeb744bf3df",
+      "createdAt": "2026-10-04T05:49:27.215Z"
     }
   ]
 }

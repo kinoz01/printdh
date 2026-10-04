@@ -5,6 +5,7 @@ import os from "os";
 import path from "path";
 import { PDFDict, PDFDocument, PDFName } from "pdf-lib";
 import { NextRequest, NextResponse } from "next/server";
+import { savePdfWithGenericMetadata } from "@/lib/pdf-metadata";
 
 const MAX_PDF_SIZE = 200 * 1024 * 1024;
 
@@ -138,7 +139,7 @@ async function scrubPdfMetadata(bytes: Uint8Array) {
     }
   }
 
-  return pdf.save({
+  return savePdfWithGenericMetadata(pdf, {
     updateFieldAppearances: false,
     useObjectStreams: true,
   });

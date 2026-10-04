@@ -3,8 +3,9 @@ import os from "os";
 import path from "path";
 import { execFile } from "child_process";
 import { NextRequest, NextResponse } from "next/server";
+import { normalizePdfMetadata } from "@/lib/pdf-metadata";
 
-type QualityPreset = "prepress" | "printer" | "ebook" | "screen";
+type QualityPreset = "high-res-300" | "prepress" | "printer" | "ebook" | "screen";
 
 const MAX_UPLOAD_SIZE_MB = 500;
 const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
@@ -23,22 +24,39 @@ function execFileAsync(command: string, args: string[]) {
 
 function normalizeQuality(value: FormDataEntryValue | null): QualityPreset {
   if (typeof value !== "string") {
-    return "printer";
+    return "high-res-300";
   }
   const normalized = value.trim().toLowerCase();
-  if (normalized === "prepress" || normalized === "printer" || normalized === "ebook" || normalized === "screen") {
+  if (
+    normalized === "high-res-300" ||
+    normalized === "prepress" ||
+    normalized === "printer" ||
+    normalized === "ebook" ||
+    normalized === "screen"
+  ) {
     return normalized;
   }
-  return "printer";
+  return "high-res-300";
 }
 
 async function compressWithGhostscript(inputPath: string, outputPath: string, quality: QualityPreset) {
-  // Ghostscript quality presets: /prepress (best), /printer (print), /ebook, /screen (smallest).
-  const gsQuality = `/${quality}`;
+  const gsQuality = quality === "high-res-300" ? "/prepress" : `/${quality}`;
+  const highResArgs = quality === "high-res-300"
+    ? [
+        "-r300",
+        "-dDownsampleColorImages=false",
+        "-dDownsampleGrayImages=false",
+        "-dDownsampleMonoImages=false",
+        "-dPassThroughJPEGImages=true",
+        "-dPassThroughJPXImages=true",
+        "-dDoThumbnails=false",
+      ]
+    : [];
   const args = [
     "-sDEVICE=pdfwrite",
     "-dCompatibilityLevel=1.6",
     `-dPDFSETTINGS=${gsQuality}`,
+    ...highResArgs,
     "-dDetectDuplicateImages=true",
     "-dNOPAUSE",
     "-dBATCH",
@@ -92,7 +110,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const outputBytes = await fs.readFile(outputPath);
+    const outputBytes = await normalizePdfMetadata(await fs.readFile(outputPath));
     const outputBuffer = new ArrayBuffer(outputBytes.byteLength);
     new Uint8Array(outputBuffer).set(outputBytes);
     return new NextResponse(outputBuffer, {

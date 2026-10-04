@@ -1,4 +1,5 @@
 import { PDFDocument, PDFFont, PDFImage } from "pdf-lib";
+import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { DEFAULT_IMAGE_LIBRARY, PAGE_HEIGHT, PAGE_WIDTH, TOTAL_PAGES } from "./constants";
 import { loadImageAssets } from "./assets";
 import { hexToRgb } from "./colors";
@@ -81,5 +82,5 @@ export async function renderDictionaryBook(options: DictionaryOptions = {}) {
     }
   }
 
-  return pdf.save();
+  return savePdfWithGenericMetadata(pdf);
 }
