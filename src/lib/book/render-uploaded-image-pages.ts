@@ -1,7 +1,15 @@
-import { PDFFont, PDFDocument, PDFImage, PDFPage, rgb, StandardFonts } from "pdf-lib";
+import { LineCapStyle, PDFFont, PDFDocument, PDFImage, PDFPage, rgb, StandardFonts } from "pdf-lib";
 import { savePdfWithGenericMetadata } from "../pdf-metadata";
 import { PAGE_HEIGHT, PAGE_WIDTH, POINTS_PER_INCH, TOTAL_PAGES } from "./constants";
 import type { ImageAsset } from "./types";
+import { hexToRgb } from "./colors";
+import {
+  DEFAULT_IMAGE_FRAME_COLOR,
+  DEFAULT_IMAGE_FRAME_STYLE,
+  getImageFrameColorOption,
+  type ImageFrameColor,
+  type ImageFrameStyle,
+} from "./image-frame";
 
 const DEFAULT_CONTENT_PADDING = 0.32 * POINTS_PER_INCH;
 const PAGE_NUMBER_PADDING = 0.35 * POINTS_PER_INCH;
@@ -30,6 +38,9 @@ export interface RenderUploadedImagePagesOptions {
   cropBackgroundlessContentImages?: boolean;
   imageFrameEnabled?: boolean;
   imageFrameThickness?: number;
+  imageFrameStyle?: ImageFrameStyle;
+  imageFrameColor?: ImageFrameColor;
+  imageFrameRoundedCorners?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: PageNumberPosition;
   pageNumberFill?: ReturnType<typeof rgb>;
@@ -50,6 +61,9 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     cropBackgroundlessContentImages = false,
     imageFrameEnabled = false,
     imageFrameThickness = 0,
+    imageFrameStyle = DEFAULT_IMAGE_FRAME_STYLE,
+    imageFrameColor = DEFAULT_IMAGE_FRAME_COLOR,
+    imageFrameRoundedCorners = false,
     showPageNumbers = false,
     pageNumberPosition = "alternating",
     pageNumberFill = rgb(0, 0, 0),
@@ -67,6 +81,7 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
   const resolvedImageFrameThickness = imageFrameEnabled
     ? Math.min(Math.max(0, imageFrameThickness), pageWidth / 2, pageHeight / 2)
     : 0;
+  const frameColor = hexToRgb(getImageFrameColorOption(imageFrameColor).hex);
   const pageNumberFont = showPageNumbers ? await pdf.embedFont(StandardFonts.HelveticaBold) : null;
   const backgroundlessContentIndexes = fineTuneBackgrounds
     ? new Set(backgroundlessContentImageIndexes.filter((index) => index < contentImages.length))
@@ -113,7 +128,16 @@ export async function renderUploadedImagePages(options: RenderUploadedImagePages
     }
 
     if (resolvedImageFrameThickness > 0) {
-      drawImageFrame(page, contentBounds, pageWidth, pageHeight, resolvedImageFrameThickness);
+      drawImageFrame(
+        page,
+        contentBounds,
+        pageWidth,
+        pageHeight,
+        resolvedImageFrameThickness,
+        imageFrameStyle,
+        frameColor,
+        imageFrameRoundedCorners
+      );
     }
 
     if (pageNumberFont && pageIndex > 0 && pageIndex < pageCount - 1) {
@@ -204,20 +228,45 @@ function drawImageFrame(
   bounds: ImageBounds,
   pageWidth: number,
   pageHeight: number,
-  thickness: number
+  thickness: number,
+  style: ImageFrameStyle,
+  color: ReturnType<typeof rgb>,
+  roundedCorners: boolean
 ) {
   const x = Math.max(thickness / 2, bounds.x - thickness / 2);
   const y = Math.max(thickness / 2, bounds.y - thickness / 2);
   const right = Math.min(pageWidth - thickness / 2, bounds.x + bounds.width + thickness / 2);
   const top = Math.min(pageHeight - thickness / 2, bounds.y + bounds.height + thickness / 2);
-  page.drawRectangle({
-    x,
-    y,
-    width: Math.max(0, right - x),
-    height: Math.max(0, top - y),
-    borderColor: rgb(0, 0, 0),
+  const width = Math.max(0, right - x);
+  const height = Math.max(0, top - y);
+  const borderOptions = {
+    borderColor: color,
     borderWidth: thickness,
-  });
+    // Zero-length dashes with round caps produce circular dots at any thickness.
+    borderDashArray: style === "dotted" ? [0, thickness * 2.5] : style === "dashed" ? [thickness * 3, thickness * 2] : [],
+    borderLineCap: style === "dotted" ? LineCapStyle.Round : LineCapStyle.Butt,
+  };
+
+  if (roundedCorners && width > 0 && height > 0) {
+    // Keep straight sides even on narrow images, and scale the corners for thick frames.
+    const radius = Math.min(Math.max(12, thickness * 2), width / 4, height / 4);
+    const path = [
+      `M ${radius} 0`,
+      `H ${width - radius}`,
+      `A ${radius} ${radius} 0 0 1 ${width} ${radius}`,
+      `V ${height - radius}`,
+      `A ${radius} ${radius} 0 0 1 ${width - radius} ${height}`,
+      `H ${radius}`,
+      `A ${radius} ${radius} 0 0 1 0 ${height - radius}`,
+      `V ${radius}`,
+      `A ${radius} ${radius} 0 0 1 ${radius} 0`,
+      "Z",
+    ].join(" ");
+    // SVG coordinates run down from the top edge; PDF coordinates run up from the bottom.
+    page.drawSvgPath(path, { x, y: top, ...borderOptions });
+  } else {
+    page.drawRectangle({ x, y, width, height, ...borderOptions });
+  }
 }
 
 function drawPageNumber(

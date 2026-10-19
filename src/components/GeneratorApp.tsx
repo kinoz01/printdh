@@ -21,6 +21,15 @@ import {
   type NumberBadgeColorKey,
 } from "@/lib/book/number-badge-colors";
 import { ImageStudio } from "./ImageStudio";
+import {
+  DEFAULT_IMAGE_FRAME_COLOR,
+  DEFAULT_IMAGE_FRAME_STYLE,
+  IMAGE_FRAME_COLOR_OPTIONS,
+  IMAGE_FRAME_STYLE_VALUES,
+  getImageFrameColorOption,
+  type ImageFrameColor,
+  type ImageFrameStyle,
+} from "@/lib/book/image-frame";
 
 const MODES = [
   {
@@ -856,7 +865,10 @@ export function GeneratorApp(props: GeneratorAppProps) {
   const [uploadedStretchContentImages, setUploadedStretchContentImages] = useState(false);
   const [uploadedCropBackgroundlessContentImages, setUploadedCropBackgroundlessContentImages] = useState(false);
   const [uploadedImageFrameEnabled, setUploadedImageFrameEnabled] = useState(false);
-  const [uploadedImageFrameThickness, setUploadedImageFrameThickness] = useState(0.05);
+  const [uploadedImageFrameThickness, setUploadedImageFrameThickness] = useState(0.03);
+  const [uploadedImageFrameStyle, setUploadedImageFrameStyle] = useState<ImageFrameStyle>(DEFAULT_IMAGE_FRAME_STYLE);
+  const [uploadedImageFrameColor, setUploadedImageFrameColor] = useState<ImageFrameColor>(DEFAULT_IMAGE_FRAME_COLOR);
+  const [uploadedImageFrameRoundedCorners, setUploadedImageFrameRoundedCorners] = useState(false);
   const [overlayOpacity, setOverlayOpacity] = useState(0.9);
   const [numberBadgeColor, setNumberBadgeColor] = useState<NumberBadgeColorKey>(DEFAULT_NUMBER_BADGE_COLOR);
   const [describedPictureTextAlignment, setDescribedPictureTextAlignment] =
@@ -1874,10 +1886,13 @@ export function GeneratorApp(props: GeneratorAppProps) {
       if (isUploadedImagesMode) {
         const safeUploadedImageFrameThickness = Number.isFinite(uploadedImageFrameThickness)
           ? uploadedImageFrameThickness
-          : 0.05;
+          : 0.03;
         base.cropBackgroundlessContentImages = uploadedCropBackgroundlessContentImages;
         base.imageFrameEnabled = uploadedImageFrameEnabled;
         base.imageFrameThickness = uploadedImageFrameEnabled ? Math.max(0, safeUploadedImageFrameThickness) * 72 : 0;
+        base.imageFrameStyle = uploadedImageFrameStyle;
+        base.imageFrameColor = uploadedImageFrameColor;
+        base.imageFrameRoundedCorners = uploadedImageFrameRoundedCorners;
       }
       base.showPageNumbers = uploadedShowPageNumbers;
       if (uploadedShowPageNumbers) {
@@ -1948,6 +1963,9 @@ export function GeneratorApp(props: GeneratorAppProps) {
     uploadedPageNumberPosition,
     uploadedImageFrameEnabled,
     uploadedImageFrameThickness,
+    uploadedImageFrameStyle,
+    uploadedImageFrameColor,
+    uploadedImageFrameRoundedCorners,
     uploadedSequentialBackgroundImages,
     uploadedShowPageNumbers,
     uploadedStretchContentImages,
@@ -2194,7 +2212,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold text-zinc-900">Image frame</span>
                       <span className="block text-xs text-zinc-600">
-                        Draw a black frame around each content image, inside the selected page padding.
+                        Frame each content image with your choice of style and color, inside the selected page padding.
                       </span>
                     </span>
                     <input
@@ -2204,6 +2222,65 @@ export function GeneratorApp(props: GeneratorAppProps) {
                       className="h-5 w-5 shrink-0 accent-black"
                     />
                   </label>
+                  <label className="flex min-w-0 flex-col gap-2">
+                    <span className="text-sm font-medium text-zinc-700">Frame style</span>
+                    <select
+                      value={uploadedImageFrameStyle}
+                      disabled={!uploadedImageFrameEnabled}
+                      onChange={(event) => setUploadedImageFrameStyle(event.target.value as ImageFrameStyle)}
+                      className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-black focus:outline-none disabled:bg-zinc-100 disabled:text-zinc-400"
+                    >
+                      {IMAGE_FRAME_STYLE_VALUES.map((style) => (
+                        <option key={style} value={style}>
+                          {style.charAt(0).toUpperCase() + style.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="flex items-center justify-between gap-4">
+                    <span className="text-sm font-medium text-zinc-700">Rounded corners</span>
+                    <input
+                      type="checkbox"
+                      checked={uploadedImageFrameRoundedCorners}
+                      disabled={!uploadedImageFrameEnabled}
+                      onChange={(event) => setUploadedImageFrameRoundedCorners(event.target.checked)}
+                      className="h-5 w-5 shrink-0 accent-black disabled:opacity-40"
+                    />
+                  </label>
+                  <fieldset disabled={!uploadedImageFrameEnabled}>
+                    <legend className="mb-2 text-sm font-medium text-zinc-700">Frame color</legend>
+                    <div className="flex flex-wrap gap-2">
+                      {IMAGE_FRAME_COLOR_OPTIONS.map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          aria-pressed={uploadedImageFrameColor === color.value}
+                          onClick={() => setUploadedImageFrameColor(color.value)}
+                          className={`inline-flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-40 ${
+                            uploadedImageFrameColor === color.value
+                              ? "border-zinc-900 bg-white text-zinc-900 ring-1 ring-zinc-900"
+                              : "border-zinc-200 bg-white text-zinc-600 enabled:hover:border-zinc-400"
+                          }`}
+                        >
+                          <span aria-hidden="true" className="h-4 w-4 rounded-full" style={{ backgroundColor: color.hex }} />
+                          {color.label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                  {uploadedImageFrameEnabled ? (
+                    <div
+                      className="flex h-16 items-center justify-center bg-white text-xs text-zinc-500"
+                      style={{
+                        borderWidth: 4,
+                        borderStyle: uploadedImageFrameStyle,
+                        borderColor: getImageFrameColorOption(uploadedImageFrameColor).hex,
+                        borderRadius: uploadedImageFrameRoundedCorners ? 12 : 0,
+                      }}
+                    >
+                      Frame preview
+                    </div>
+                  ) : null}
                   <label className="flex min-w-0 flex-col gap-2">
                     <span className="text-sm font-medium text-zinc-700">Frame thickness (inches)</span>
                     <input
@@ -2356,7 +2433,7 @@ export function GeneratorApp(props: GeneratorAppProps) {
                   uploadedStretchContentImages
                     ? "Stretched horizontally and vertically to match the full PDF page."
                     : uploadedImageFrameEnabled
-                      ? `Centered with a ${uploadedImageFrameThickness.toFixed(2)}in frame around the image and ${uploadedContentPadding.toFixed(2)}in page padding.`
+                      ? `Centered with a ${uploadedImageFrameThickness.toFixed(2)}in ${uploadedImageFrameColor} ${uploadedImageFrameStyle} frame around the image and ${uploadedContentPadding.toFixed(2)}in page padding.`
                       : `Centered and fitted with ${uploadedContentPadding.toFixed(2)}in padding.`
                 }
                 files={uploadedContentFiles}

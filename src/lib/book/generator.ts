@@ -6,6 +6,7 @@ import { renderDictionaryBook } from "./render-dictionary";
 import { renderUploadedImagePages } from "./render-uploaded-image-pages";
 import { renderUploadedPdfPages } from "./render-uploaded-pdf-pages";
 import { hexToRgb } from "./colors";
+import type { ImageFrameColor, ImageFrameStyle } from "./image-frame";
 import { getNumberBadgeColorOption, type NumberBadgeColorKey } from "./number-badge-colors";
 import { FACT_STYLE, TITLE_STYLE, type TextAlignment } from "./types";
 import type { ImageAsset, PdfAsset } from "./types";
@@ -51,6 +52,9 @@ export interface GenerateBookPayload {
   cropBackgroundlessContentImages?: boolean;
   imageFrameEnabled?: boolean;
   imageFrameThickness?: number;
+  imageFrameStyle?: ImageFrameStyle;
+  imageFrameColor?: ImageFrameColor;
+  imageFrameRoundedCorners?: boolean;
   showPageNumbers?: boolean;
   pageNumberPosition?: "alternating" | "center";
   pageSize?: PageSizePreset;
@@ -365,6 +369,9 @@ export async function generateBook(payload: GenerateBookPayload) {
         cropBackgroundlessContentImages: payload.cropBackgroundlessContentImages,
         imageFrameEnabled: payload.imageFrameEnabled,
         imageFrameThickness: payload.imageFrameThickness,
+        imageFrameStyle: payload.imageFrameStyle,
+        imageFrameColor: payload.imageFrameColor,
+        imageFrameRoundedCorners: payload.imageFrameRoundedCorners,
         showPageNumbers: payload.showPageNumbers,
         pageNumberPosition: payload.pageNumberPosition,
         pageNumberFill: numberBadgeFill,

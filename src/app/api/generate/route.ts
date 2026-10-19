@@ -3,6 +3,7 @@ import { z } from "zod";
 import { loadImageAssets, type ProvidedBookImage } from "@/lib/book/assets";
 import { generateBook } from "@/lib/book/generator";
 import { NUMBER_BADGE_COLOR_VALUES } from "@/lib/book/number-badge-colors";
+import { IMAGE_FRAME_COLOR_VALUES, IMAGE_FRAME_STYLE_VALUES } from "@/lib/book/image-frame";
 import type { PdfAsset } from "@/lib/book/types";
 
 const schema = z.object({
@@ -57,6 +58,9 @@ const schema = z.object({
   cropBackgroundlessContentImages: z.boolean().optional(),
   imageFrameEnabled: z.boolean().optional(),
   imageFrameThickness: z.number().min(0).optional(),
+  imageFrameStyle: z.enum(IMAGE_FRAME_STYLE_VALUES).optional(),
+  imageFrameColor: z.enum(IMAGE_FRAME_COLOR_VALUES).optional(),
+  imageFrameRoundedCorners: z.boolean().optional(),
   showPageNumbers: z.boolean().optional(),
   pageNumberPosition: z.enum(["alternating", "center"]).optional(),
   pageSize: z.enum(["square", "us-letter", "hardcover"]).optional(),
