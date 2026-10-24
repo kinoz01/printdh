@@ -1613,6 +1613,19 @@
       },
       "id": "d8ecd2e2-4316-492f-958a-c27f81d2276c",
       "createdAt": "2026-10-19T06:00:26.072Z"
+    },
+    {
+      "section": "authors",
+      "value": "https://www.amazon.com/stores/Amanda-Miggs/author/B08X63KBYY?ref=ap_rdr&shoppingPortalEnabled=true",
+      "preview": {
+        "url": "https://www.amazon.com/stores/Amanda-Miggs/author/B08X63KBYY?ref=ap_rdr&shoppingPortalEnabled=true",
+        "title": "Amanda Miggs: books, biography, latest update",
+        "description": "Follow Amanda Miggs and explore their bibliography from Amazon&#039;s Amanda Miggs Author Page.",
+        "image": "https://m.media-amazon.com/images/S/amzn-author-media-prod/e8dab23jnvisscneactb4lkibl.jpg",
+        "siteName": "Amazon.com"
+      },
+      "id": "c4585627-f204-413b-bfd3-61cee63af858",
+      "createdAt": "2026-10-21T06:35:41.019Z"
     }
   ]
 }
